@@ -1,4 +1,4 @@
-const CACHE_NAME = "stock-manager-v1";
+const CACHE_NAME = "stock-manager-v3";
 
 const APP_FILES = [
   "./",
@@ -6,13 +6,21 @@ const APP_FILES = [
   "./styles.css",
   "./app.js",
   "./config.js",
-  "./manifest.json"
+  "./manifest.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(APP_FILES);
+    caches.open(CACHE_NAME).then(async cache => {
+      for (const file of APP_FILES) {
+        try {
+          await cache.add(file);
+        } catch (error) {
+          console.warn("Could not cache:", file, error);
+        }
+      }
     })
   );
 
@@ -21,13 +29,13 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
+    caches.keys().then(keys =>
+      Promise.all(
         keys
           .filter(key => key !== CACHE_NAME)
           .map(key => caches.delete(key))
-      );
-    })
+      )
+    )
   );
 
   self.clients.claim();
@@ -39,11 +47,13 @@ self.addEventListener("fetch", event => {
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        const copy = response.clone();
+        if (response && response.status === 200) {
+          const copy = response.clone();
 
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, copy);
-        });
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, copy);
+          });
+        }
 
         return response;
       })
