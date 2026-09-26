@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stock Manager — Oriflame Sub-Dealer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💄</text></svg>">
+<link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#A6285C">
+
+<!-- iPhone / iPad PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Stock Manager">
+
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=6">
+</head>
+<body>
+
+<!-- ================= TOP BAR ================= -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">O</div>
+    <div>
+      <h1>Stock Manager</h1>
+      <div class="sub">Oriflame — Sub-Dealer</div>
+    </div>
+  </div>
+  <div class="status-pill">
+    <span class="status-dot off" id="connStatusDot"></span>
+    <span id="connStatusText">Connecting…</span>
+  </div>
+</header>
+
+<!-- ================= HORIZONTAL NAV (top on desktop, bottom tabs on phone) ================= -->
+<nav class="nav" id="mainNav">
+  <button class="nav-btn active" data-view="dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+    <span>Dashboard</span>
+  </button>
+  <button class="nav-btn" data-view="products">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+    <span>Products</span>
+  </button>
+  <button class="nav-btn" data-view="stock">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7l-8-4-8 4 8 4 8-4z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M4 7l8 4M20 7l-8 4"/></svg>
+    <span>Stock</span>
+  </button>
+  <button class="nav-btn" data-view="purchases">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.2 12.2a2 2 0 0 0 2 1.8h8.6a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="9" cy="21" r="1"/><circle cx="17" cy="21" r="1"/></svg>
+    <span>Purchases</span>
+  </button>
+  <button class="nav-btn" data-view="sales">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    <span>Sales</span>
+  </button>
+</nav>
+
+<main>
+
+  <!-- Shown until Supabase URL/key are configured -->
+  <div class="setup-banner" id="setupBanner" style="display:none;">
+    Not connected to your database yet. Open <code>config.js</code> and paste in your Supabase Project URL and anon key, then reload this page. See <code>README.md</code> for the two-minute setup steps.
+  </div>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section class="view active" id="view-dashboard">
+    <div class="dash-header">
+      <h2>Dashboard</h2>
+      <div class="dash-controls">
+        <div class="seg">
+          <button type="button" class="seg-btn active" id="dashScopeMonthBtn">This month</button>
+          <button type="button" class="seg-btn" id="dashScopeAllBtn">All-time</button>
+        </div>
+        <div class="month-nav" id="dashMonthNav">
+          <button type="button" class="month-nav-btn" id="dashPrevMonth" aria-label="Previous month">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span id="dashMonthNavLabel">Month</span>
+          <button type="button" class="month-nav-btn" id="dashNextMonth" aria-label="Next month">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="dash-hint" id="dashMonthLabel">This month's business at a glance</p>
+
+    <div class="panel-split">
+      <div class="panel">
+        <h3>Sales</h3>
+        <div class="donut-wrap"><canvas id="salesDonutChart"></canvas></div>
+        <div class="breakdown-row"><span><span class="dot" style="background:#2F7D56;"></span>Cash</span><strong id="statSalesCash">₹0</strong></div>
+        <div class="breakdown-row"><span><span class="dot" style="background:#8FCDA9;"></span>Credit</span><strong id="statSalesCredit">₹0</strong></div>
+        <div class="breakdown-row total-row"><span>Total</span><strong id="statSalesTotal">₹0</strong></div>
+      </div>
+      <div class="panel">
+        <h3>Purchases</h3>
+        <div class="donut-wrap"><canvas id="purchaseDonutChart"></canvas></div>
+        <div class="breakdown-row"><span><span class="dot" style="background:#B8862E;"></span>Cash</span><strong id="statPurchaseCash">₹0</strong></div>
+        <div class="breakdown-row"><span><span class="dot" style="background:#E4C578;"></span>Credit</span><strong id="statPurchaseCredit">₹0</strong></div>
+        <div class="breakdown-row total-row"><span>Total</span><strong id="statPurchaseTotal">₹0</strong></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Total sales by month</h3>
+      <div class="trend-wrap"><canvas id="salesTrendChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h3>Recent activity</h3>
+      <div id="recentActivity"></div>
+    </div>
+  </section>
+
+  <!-- ================= PRODUCTS ================= -->
+  <section class="view" id="view-products">
+    <div class="view-head">
+      <div>
+        <h2>Products</h2>
+        <p>Everything you stock, with a photo for quick recognition</p>
+      </div>
+      <button class="btn" id="btnAddProduct">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add product
+      </button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="productSearch" placeholder="Search products…">
+    </div>
+    <div class="products-grid" id="productsGrid"></div>
+  </section>
+
+  <!-- ================= STOCK ================= -->
+  <section class="view" id="view-stock">
+    <div class="view-head">
+      <div>
+        <h2>Stock</h2>
+        <p>Quantity remaining for every product — low stock is 3 units or fewer</p>
+      </div>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="stockSearch" placeholder="Search products…">
+      <select id="stockFilter">
+        <option value="all">All products</option>
+        <option value="low">Low stock only</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Product</th><th class="num">Quantity left</th><th>Status</th></tr></thead>
+          <tbody id="stockTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PURCHASES ================= -->
+  <section class="view" id="view-purchases">
+    <div class="view-head">
+      <div>
+        <h2>Purchases</h2>
+        <p>Bills you've received from dealers</p>
+      </div>
+      <button class="btn" id="btnAddPurchase">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add purchase bill
+      </button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Dealer</th><th>Date</th><th>Payment</th><th>Status</th><th class="num">Total</th><th></th></tr></thead>
+          <tbody id="purchasesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SALES ================= -->
+  <section class="view" id="view-sales">
+    <div class="view-head">
+      <div>
+        <h2>Sales</h2>
+        <p>Bills you've given to buyers</p>
+      </div>
+      <button class="btn" id="btnAddSale">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add sale bill
+      </button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Buyer</th><th>Date</th><th>Payment</th><th>Status</th><th class="num">Total</th><th></th></tr></thead>
+          <tbody id="salesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= MODAL: ADD PRODUCT ================= -->
+<div class="modal-backdrop" id="modalProduct">
+  <div class="modal">
+    <div class="modal-head"><h3 id="productModalTitle">Add product</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <form id="formProduct">
+      <div class="field">
+        <label>Product name</label>
+        <input type="text" id="pName" required placeholder="e.g. Oriflame Even Out Serum">
+      </div>
+      <div class="field" id="pQtyField">
+        <label>Starting quantity</label>
+        <input type="number" id="pQty" min="0" value="0" required>
+      </div>
+      <div class="field">
+        <label>Photo (optional)</label>
+        <div class="upload-row">
+          <div class="upload-preview" id="pPhotoPreview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg></div>
+          <input type="file" id="pPhoto" accept="image/*" style="flex:1;">
+        </div>
+        <div class="hint" id="pPhotoHint">Uploaded to your Supabase storage bucket "product-images".</div>
+      </div>
+      <button type="submit" class="btn block" id="pSubmitBtn">Save product</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL: ADD PURCHASE ================= -->
+<div class="modal-backdrop" id="modalPurchase">
+  <div class="modal">
+    <div class="modal-head"><h3 id="purchaseModalTitle">Add purchase bill</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <form id="formPurchase">
+      <div class="field-row">
+        <div class="field"><label>Dealer name</label><input type="text" id="puDealer" required placeholder="Who did you buy from?"></div>
+        <div class="field"><label>Date</label><input type="date" id="puDate" required></div>
+      </div>
+      <div class="field">
+        <label>Payment type</label>
+        <div class="pay-toggle">
+          <button type="button" class="cash active" data-pay="cash">Cash</button>
+          <button type="button" class="credit" data-pay="credit">Credit</button>
+        </div>
+        <input type="hidden" id="puPayType" value="cash">
+      </div>
+
+      <h3 style="font-size:14px; margin: 18px 0 8px;">Products purchased</h3>
+      <div id="puItems"></div>
+      <button type="button" class="btn subtle sm" id="puAddItem" style="margin-bottom:14px;">+ Add another product</button>
+
+      <div class="bill-total"><span>Total</span><span id="puTotal">₹0.00</span></div>
+      <div class="modal-actions">
+        <button type="button" class="btn subtle block" id="puDraftBtn">Save as draft</button>
+        <button type="submit" class="btn block" id="puSubmitBtn">Save &amp; complete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL: ADD SALE ================= -->
+<div class="modal-backdrop" id="modalSale">
+  <div class="modal">
+    <div class="modal-head"><h3 id="saleModalTitle">Add sale bill</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <form id="formSale">
+      <div class="field-row">
+        <div class="field"><label>Buyer name</label><input type="text" id="saBuyer" required placeholder="Who bought this?"></div>
+        <div class="field"><label>Date</label><input type="date" id="saDate" required></div>
+      </div>
+      <div class="field">
+        <label>Payment type</label>
+        <div class="pay-toggle">
+          <button type="button" class="cash active" data-pay="cash">Cash</button>
+          <button type="button" class="credit" data-pay="credit">Credit</button>
+        </div>
+        <input type="hidden" id="saPayType" value="cash">
+      </div>
+
+      <h3 style="font-size:14px; margin: 18px 0 8px;">Products sold</h3>
+      <div id="saItems"></div>
+      <button type="button" class="btn subtle sm" id="saAddItem" style="margin-bottom:14px;">+ Add another product</button>
+
+      <div class="bill-total"><span>Total</span><span id="saTotal">₹0.00</span></div>
+      <div class="modal-actions">
+        <button type="button" class="btn subtle block" id="saDraftBtn">Save as draft</button>
+        <button type="submit" class="btn block" id="saSubmitBtn">Save &amp; complete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL: BILL DETAIL (view purchase/sale line items) ================= -->
+<div class="modal-backdrop" id="modalDetail">
+  <div class="modal">
+    <div class="modal-head"><h3 id="detailTitle">Bill</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <div id="detailBody"></div>
+    <div id="detailEditWrap" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js?v=8"></script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("./sw.js")
+        .then(() => {
+          console.log("Service Worker registered");
+        })
+        .catch(error => {
+          console.error("Service Worker registration failed:", error);
+        });
+    });
+  }
+</script>
+</body>
+</html>
