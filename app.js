@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("saDate").valueAsDate = new Date();
   bindDashboardControls();
   bindScanner();
+  bindPageExitSafety();
 
   const configured = SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT-ID") &&
                       SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes("YOUR-ANON");
@@ -111,9 +112,7 @@ function billHasValidItem(kind) {
   });
 }
 
-async function dismissBillModal(kind) {
-  if (!isConnected || !billHasContent(kind)) { closeAllModals(); return; }
-
+function resolveSaveStatus(kind) {
   const isEditing = kind === "purchase" ? !!editingPurchaseId : !!editingSaleId;
   let statusToSave = "draft";
   if (isEditing) {
@@ -122,13 +121,42 @@ async function dismissBillModal(kind) {
       : salesCache.find(s => s.id === editingSaleId);
     statusToSave = header ? header.status : "draft";
   }
-
   // Never silently save a "completed" bill with no product lines left in it
   // — that would wipe out its stock effect with nothing to replace it.
   // Fall back to a draft in that edge case so the edit is still preserved.
   if (statusToSave === "completed" && !billHasValidItem(kind)) statusToSave = "draft";
+  return statusToSave;
+}
 
-  await saveBill(kind, statusToSave, { silent: true });
+async function dismissBillModal(kind) {
+  if (!isConnected || !billHasContent(kind)) { closeAllModals(); return; }
+  await saveBill(kind, resolveSaveStatus(kind), { silent: true });
+}
+
+// Catches the case a click can't: the app being backgrounded, the phone
+// screen locked, or the browser tab/app closed outright — none of which
+// fire a click on the modal. 'visibilitychange' fires the moment the page
+// is hidden (switching apps, locking the screen), while the page is still
+// alive long enough to give this save a real chance to finish;
+// 'pagehide' is the best-effort backstop for an outright close/navigation.
+// It saves without closing the modal (opts.keepOpen), so if the person
+// comes straight back nothing looks different — it's just now backed by a
+// saved draft in case they don't.
+function saveOpenBillsForPageExit() {
+  if (!isConnected) return;
+  ["purchase", "sale"].forEach(kind => {
+    const modalId = kind === "purchase" ? "modalPurchase" : "modalSale";
+    const isOpen = document.getElementById(modalId).classList.contains("open");
+    if (!isOpen || !billHasContent(kind)) return;
+    saveBill(kind, resolveSaveStatus(kind), { silent: true, keepOpen: true });
+  });
+}
+
+function bindPageExitSafety() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveOpenBillsForPageExit();
+  });
+  window.addEventListener("pagehide", saveOpenBillsForPageExit);
 }
 
 function setConnStatus(ok, text) {
@@ -715,13 +743,52 @@ function openScanner(kind) {
   startScannerCamera();
 }
 
+// Barcode formats actually used on retail product packaging — limiting to
+// these (instead of also trying QR/Data Matrix/Aztec/PDF417 on every frame)
+// makes each frame decode faster, which is most of why a scan sometimes
+// needed several tries before.
+function barcodeHints() {
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    // QR codes and Data Matrix — what your products actually use (see the
+    // gold-cap label with the QR code and "47697" underneath)
+    ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.DATA_MATRIX,
+    // Classic 1D retail barcodes, kept in case some products use these instead
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+    ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+    ZXing.BarcodeFormat.ITF
+  ]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  return hints;
+}
+
 async function startScannerCamera() {
   try {
-    scannerReader = new ZXing.BrowserMultiFormatReader();
+    // Second constructor argument is the pause after a SUCCESSFUL decode
+    // before scanning again — short, since our own "scannerBusy" flag
+    // already takes over from there while the found/not-found panel shows.
+    scannerReader = new ZXing.BrowserMultiFormatReader(barcodeHints(), 100);
+    if ("timeBetweenDecodingAttempts" in scannerReader) {
+      scannerReader.timeBetweenDecodingAttempts = 0; // no artificial delay between frame attempts
+    }
     const devices = await scannerReader.listVideoInputDevices();
     if (!devices.length) throw new Error("No camera found on this device.");
     const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
-    scannerReader.decodeFromVideoDevice(backCam.deviceId, "scannerVideo", (result) => {
+
+    // A moderate resolution decodes faster per frame than asking for full
+    // HD (more pixels = more work for the decoder on every frame), and
+    // continuous autofocus matters more than raw resolution for reading a
+    // small QR code or barcode up close.
+    const constraints = {
+      video: {
+        deviceId: { exact: backCam.deviceId },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        advanced: [{ focusMode: "continuous" }]
+      }
+    };
+    await scannerReader.decodeFromConstraints(constraints, "scannerVideo", (result) => {
       if (scannerBusy || !result) return;
       handleScanResult(result.getText());
     });
@@ -747,7 +814,12 @@ function handleScanResult(code) {
   if (scannerKind === "product-field") {
     document.getElementById("pBarcode").value = code;
     closeScanner();
-    toast("Barcode captured");
+    const dup = findProductByBarcode(code, editingProductId);
+    if (dup) {
+      toast(`This barcode is already used by "${dup.name}"`, true);
+    } else {
+      toast("Barcode captured");
+    }
     return;
   }
 
@@ -1005,13 +1077,19 @@ function updateBillTotal(kind) {
   document.getElementById(kind === "purchase" ? "puTotal" : "saTotal").textContent = money(total);
 }
 
+const billSaveLock = { purchase: false, sale: false };
+
 // status: 'draft' or 'completed'. opts.silent: used when auto-saving a
 // draft on dismiss — skips the "enter a name" style validation toasts and
 // fills in a placeholder name/date instead of blocking the save, since the
 // point is to preserve whatever was typed, not to demand it be complete.
+// opts.keepOpen: used for the background safety-save (app backgrounded/
+// closed) — saves without closing the modal, so if the person comes back
+// nothing looks different, but the data is safely persisted either way.
 async function saveBill(kind, status, opts) {
   opts = opts || {};
   if (!requireConnection()) return;
+  if (billSaveLock[kind]) return; // a save for this bill is already in flight
   const isPurchase = kind === "purchase";
   const prefix = isPurchase ? "pu" : "sa";
   const container = document.getElementById(prefix + "Items");
@@ -1051,12 +1129,13 @@ async function saveBill(kind, status, opts) {
     if (!date) date = new Date().toISOString().slice(0, 10);
   }
 
+  billSaveLock[kind] = true;
   const submitBtn = document.getElementById(prefix + "SubmitBtn");
   const draftBtn = document.getElementById(prefix + "DraftBtn");
   submitBtn.disabled = true; draftBtn.disabled = true;
   const busyBtn = status === "draft" ? draftBtn : submitBtn;
   const busyLabel = busyBtn.textContent;
-  busyBtn.textContent = "Saving…";
+  if (!opts.silent) busyBtn.textContent = "Saving…";
 
   try {
     if (isPurchase) {
@@ -1068,10 +1147,14 @@ async function saveBill(kind, status, opts) {
         });
         if (error) throw error;
       } else {
-        const { error } = await sb.rpc("create_purchase", {
+        const { data, error } = await sb.rpc("create_purchase", {
           p_dealer_name: name, p_purchase_date: date, p_payment_type: payType, p_status: status, p_items: items
         });
         if (error) throw error;
+        // Remember the row we just created so a second save (another
+        // background safety-save, or the person finishing up afterwards)
+        // updates it instead of inserting a duplicate.
+        editingPurchaseId = data;
       }
     } else {
       const payType = document.getElementById("saPayType").value;
@@ -1082,14 +1165,17 @@ async function saveBill(kind, status, opts) {
         });
         if (error) throw error;
       } else {
-        const { error } = await sb.rpc("create_sale", {
+        const { data, error } = await sb.rpc("create_sale", {
           p_buyer_name: name, p_sale_date: date, p_payment_type: payType, p_status: status, p_items: items
         });
         if (error) throw error;
+        editingSaleId = data;
       }
     }
 
-    if (!opts.silent) {
+    if (opts.silent && opts.keepOpen) {
+      // Pure background safety-save — nothing to show, nothing to close.
+    } else if (!opts.silent) {
       toast(status === "draft"
         ? "Saved as draft"
         : (isPurchase ? "Purchase bill saved" : "Sale bill saved"));
@@ -1098,13 +1184,14 @@ async function saveBill(kind, status, opts) {
         ? (isPurchase ? "Purchase bill updated — changes saved" : "Sale bill updated — changes saved")
         : "Unfinished bill saved as a draft so nothing was lost");
     }
-    closeAllModals();
+    if (!opts.keepOpen) closeAllModals();
     await refreshAll();
   } catch (err) {
-    toast("Couldn't save bill: " + friendlyError(err), true);
+    if (!opts.keepOpen) toast("Couldn't save bill: " + friendlyError(err), true);
   } finally {
     submitBtn.disabled = false; draftBtn.disabled = false;
     busyBtn.textContent = busyLabel;
+    billSaveLock[kind] = false;
   }
 }
 
