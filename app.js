@@ -29,6 +29,11 @@ if (typeof Chart !== "undefined" && typeof ChartDataLabels !== "undefined") {
   Chart.register(ChartDataLabels);
 }
 
+// Barcode scanner state
+let scannerKind = null;   // 'purchase' | 'sale' | 'product-field'
+let scannerReader = null; // ZXing.BrowserMultiFormatReader instance
+let scannerBusy = false;  // true while a found/not-found panel is showing, to ignore further decodes
+
 // ---------------------------------------------------------
 // Init
 // ---------------------------------------------------------
@@ -36,6 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("puDate").valueAsDate = new Date();
   document.getElementById("saDate").valueAsDate = new Date();
   bindDashboardControls();
+  bindScanner();
 
   const configured = SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT-ID") &&
                       SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes("YOUR-ANON");
@@ -194,7 +200,11 @@ function isSameMonth(dateStr, ref) {
   return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 }
 function friendlyError(err) {
-  if (err && err.code === "23505") return "A product with this name already exists.";
+  if (err && err.code === "23505") {
+    const msg = (err.message || "").toLowerCase();
+    if (msg.includes("barcode")) return "That barcode is already assigned to another product.";
+    return "A product with this name already exists.";
+  }
   // Postgres exceptions raised from our RPC functions arrive in err.message
   return (err && (err.message || err.error_description || err.hint)) || String(err);
 }
@@ -203,6 +213,11 @@ function findProductByName(name, excludeId) {
   const n = normalizeName(name);
   if (!n) return null;
   return productsCache.find(p => normalizeName(p.name) === n && p.id !== excludeId);
+}
+function findProductByBarcode(code, excludeId) {
+  const c = (code || "").trim();
+  if (!c) return null;
+  return productsCache.find(p => (p.barcode || "").trim() === c && p.id !== excludeId);
 }
 
 // ---------------------------------------------------------
@@ -299,12 +314,14 @@ function openProductModal(id) {
     if (!p) return;
     document.getElementById("productModalTitle").textContent = "Edit product";
     document.getElementById("pName").value = p.name;
+    document.getElementById("pBarcode").value = p.barcode || "";
     document.getElementById("pQtyField").style.display = "none"; // quantity is managed via purchases/sales
     document.getElementById("pPhotoHint").textContent = "Choose a new photo only if you want to replace the current one.";
     if (p.image_url) document.getElementById("pPhotoPreview").innerHTML = `<img src="${escapeHtml(p.image_url)}">`;
     document.getElementById("pSubmitBtn").textContent = "Save changes";
   } else {
     document.getElementById("productModalTitle").textContent = "Add product";
+    document.getElementById("pBarcode").value = "";
     document.getElementById("pQtyField").style.display = "";
     document.getElementById("pPhotoHint").textContent = 'Uploaded to your Supabase storage bucket "product-images".';
     document.getElementById("pSubmitBtn").textContent = "Save product";
@@ -323,13 +340,20 @@ function bindProductModal() {
     reader.readAsDataURL(file);
   });
 
+  document.getElementById("pScanBarcodeBtn").addEventListener("click", () => openScanner("product-field"));
+
   document.getElementById("formProduct").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!requireConnection()) return;
 
     const name = document.getElementById("pName").value.trim();
+    const barcode = document.getElementById("pBarcode").value.trim() || null;
     const dup = findProductByName(name, editingProductId);
     if (dup) { toast(`A product named "${dup.name}" already exists`, true); return; }
+    if (barcode) {
+      const dupBarcode = findProductByBarcode(barcode, editingProductId);
+      if (dupBarcode) { toast(`That barcode is already assigned to "${dupBarcode.name}"`, true); return; }
+    }
 
     const btn = document.getElementById("pSubmitBtn");
     btn.disabled = true; btn.textContent = "Saving…";
@@ -346,14 +370,14 @@ function bindProductModal() {
       }
 
       if (editingProductId) {
-        const update = { name };
+        const update = { name, barcode };
         if (image_url) update.image_url = image_url;
         const { error } = await sb.from("products").update(update).eq("id", editingProductId);
         if (error) throw error;
         toast("Product updated");
       } else {
         const qty = parseInt(document.getElementById("pQty").value, 10) || 0;
-        const { error } = await sb.from("products").insert({ name, quantity: qty, image_url: image_url || null });
+        const { error } = await sb.from("products").insert({ name, quantity: qty, image_url: image_url || null, barcode });
         if (error) throw error;
         toast("Product added");
       }
@@ -486,6 +510,7 @@ function openPurchaseModal(id) {
 function bindPurchaseModal() {
   document.getElementById("btnAddPurchase").addEventListener("click", () => openPurchaseModal(null));
   document.getElementById("puAddItem").addEventListener("click", () => addItemRow("purchase"));
+  document.getElementById("puScanBtn").addEventListener("click", () => openScanner("purchase"));
   document.querySelectorAll('#modalPurchase .pay-toggle button').forEach(b => {
     b.addEventListener("click", () => setPayToggle("purchase", b.dataset.pay));
   });
@@ -578,6 +603,7 @@ function openSaleModal(id) {
 function bindSaleModal() {
   document.getElementById("btnAddSale").addEventListener("click", () => openSaleModal(null));
   document.getElementById("saAddItem").addEventListener("click", () => addItemRow("sale"));
+  document.getElementById("saScanBtn").addEventListener("click", () => openScanner("sale"));
   document.querySelectorAll('#modalSale .pay-toggle button').forEach(b => {
     b.addEventListener("click", () => setPayToggle("sale", b.dataset.pay));
   });
@@ -593,6 +619,205 @@ function setPayToggle(kind, type) {
   });
 }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ==========================================================
+// BARCODE SCANNER
+// Used three ways: filling the barcode field on the product form
+// ('product-field'), or adding/incrementing a line item while filling out
+// a purchase or sale bill ('purchase' / 'sale').
+// ==========================================================
+function bindScanner() {
+  document.getElementById("scannerCloseBtn").addEventListener("click", closeScanner);
+
+  document.getElementById("scannerFoundConfirm").addEventListener("click", () => {
+    const panel = document.getElementById("scannerFoundPanel");
+    const productId = panel.dataset.productId;
+    const productName = panel.dataset.productName;
+    const qty = parseInt(document.getElementById("scannerFoundQty").value, 10) || 0;
+    const price = parseFloat(document.getElementById("scannerFoundPrice").value) || 0;
+    if (qty <= 0) { toast("Enter a quantity", true); return; }
+
+    addOrIncrementScannedItem(scannerKind, productId, productName, qty, price);
+    panel.hidden = true;
+    document.getElementById("scannerStatus").textContent = `Added ${productName}. Scan another, or close when done.`;
+    scannerBusy = false;
+  });
+
+  document.getElementById("scannerFoundCancel").addEventListener("click", () => {
+    document.getElementById("scannerFoundPanel").hidden = true;
+    document.getElementById("scannerStatus").textContent = "Point your camera at a barcode…";
+    scannerBusy = false;
+  });
+
+  document.getElementById("scannerNewPhoto").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { document.getElementById("scannerNewPhotoPreview").innerHTML = `<img src="${reader.result}">`; };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("scannerNewCancel").addEventListener("click", () => {
+    document.getElementById("scannerNotFoundPanel").hidden = true;
+    document.getElementById("scannerStatus").textContent = "Point your camera at a barcode…";
+    scannerBusy = false;
+  });
+
+  document.getElementById("scannerNewForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!requireConnection()) return;
+    const panel = document.getElementById("scannerNotFoundPanel");
+    const code = panel.dataset.barcode;
+    const name = document.getElementById("scannerNewName").value.trim();
+    if (!name) { toast("Enter a product name", true); return; }
+    const dupName = findProductByName(name);
+    if (dupName) { toast(`A product named "${dupName.name}" already exists`, true); return; }
+    if (findProductByBarcode(code)) { toast("That barcode was just added for another product", true); return; }
+
+    const btn = document.getElementById("scannerNewSubmitBtn");
+    btn.disabled = true; btn.textContent = "Adding…";
+    try {
+      const file = document.getElementById("scannerNewPhoto").files[0];
+      let image_url = null;
+      if (file) {
+        const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const { error: upErr } = await sb.storage.from("product-images").upload(path, file, { upsert: true });
+        if (upErr) throw upErr;
+        const { data: pub } = sb.storage.from("product-images").getPublicUrl(path);
+        image_url = pub.publicUrl;
+      }
+      const { data, error } = await sb.from("products").insert({ name, quantity: 0, image_url, barcode: code }).select().single();
+      if (error) throw error;
+
+      await loadProducts();
+      panel.hidden = true;
+      toast(`Added "${data.name}"`);
+      showScannerFoundPanel(data.id, data.name, code);
+    } catch (err) {
+      toast("Couldn't add product: " + friendlyError(err), true);
+    } finally {
+      btn.disabled = false; btn.textContent = "Add product";
+    }
+  });
+}
+
+function openScanner(kind) {
+  if (typeof ZXing === "undefined") {
+    toast("Barcode scanning isn't available right now (camera library failed to load)", true);
+    return;
+  }
+  scannerKind = kind;
+  scannerBusy = false;
+  document.getElementById("scannerFoundPanel").hidden = true;
+  document.getElementById("scannerNotFoundPanel").hidden = true;
+  document.getElementById("scannerStatus").textContent = "Point your camera at a barcode…";
+  document.getElementById("barcodeScanner").classList.add("open");
+  startScannerCamera();
+}
+
+async function startScannerCamera() {
+  try {
+    scannerReader = new ZXing.BrowserMultiFormatReader();
+    const devices = await scannerReader.listVideoInputDevices();
+    if (!devices.length) throw new Error("No camera found on this device.");
+    const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    scannerReader.decodeFromVideoDevice(backCam.deviceId, "scannerVideo", (result) => {
+      if (scannerBusy || !result) return;
+      handleScanResult(result.getText());
+    });
+  } catch (err) {
+    document.getElementById("scannerStatus").textContent = "Couldn't start the camera: " + (err.message || err);
+  }
+}
+
+function stopScannerCamera() {
+  if (scannerReader) {
+    try { scannerReader.reset(); } catch (e) { /* ignore */ }
+    scannerReader = null;
+  }
+}
+
+function closeScanner() {
+  stopScannerCamera();
+  document.getElementById("barcodeScanner").classList.remove("open");
+  scannerKind = null;
+}
+
+function handleScanResult(code) {
+  if (scannerKind === "product-field") {
+    document.getElementById("pBarcode").value = code;
+    closeScanner();
+    toast("Barcode captured");
+    return;
+  }
+
+  scannerBusy = true;
+  const product = findProductByBarcode(code);
+  if (product) {
+    showScannerFoundPanel(product.id, product.name, code);
+  } else {
+    showScannerNotFoundPanel(code);
+  }
+}
+
+function showScannerFoundPanel(productId, productName, code) {
+  document.getElementById("scannerNotFoundPanel").hidden = true;
+  document.getElementById("scannerStatus").textContent = "";
+  const panel = document.getElementById("scannerFoundPanel");
+  panel.hidden = false;
+  panel.dataset.productId = productId;
+  panel.dataset.productName = productName;
+  document.getElementById("scannerFoundName").textContent = productName;
+  document.getElementById("scannerFoundQty").value = 1;
+
+  // Prefill the price from a matching row already in this bill, if any —
+  // makes it more likely a repeat scan merges into the same line.
+  const container = document.getElementById(scannerKind === "purchase" ? "puItems" : "saItems");
+  let prefillPrice = 0;
+  if (container) {
+    container.querySelectorAll(".item-row").forEach(row => {
+      if (row.querySelector('[data-role="product"]').value === productId) {
+        prefillPrice = parseFloat(row.querySelector('[data-role="price"]').value) || prefillPrice;
+      }
+    });
+  }
+  document.getElementById("scannerFoundPrice").value = prefillPrice;
+  scannerBusy = true;
+}
+
+function showScannerNotFoundPanel(code) {
+  document.getElementById("scannerFoundPanel").hidden = true;
+  document.getElementById("scannerStatus").textContent = "";
+  const panel = document.getElementById("scannerNotFoundPanel");
+  panel.hidden = false;
+  panel.dataset.barcode = code;
+  document.getElementById("scannerNotFoundCode").textContent = code;
+  document.getElementById("scannerNewName").value = "";
+  document.getElementById("scannerNewPhoto").value = "";
+  document.getElementById("scannerNewPhotoPreview").innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>`;
+}
+
+// If a row for this product already exists at the same unit price, bump its
+// quantity instead of adding a duplicate line; a different price gets its
+// own new line (e.g. a fresh batch bought/sold at a different rate).
+function addOrIncrementScannedItem(kind, productId, productName, qty, price) {
+  const container = document.getElementById(kind === "purchase" ? "puItems" : "saItems");
+  const rows = [...container.querySelectorAll(".item-row")];
+  const match = rows.find(row => {
+    const rowProductId = row.querySelector('[data-role="product"]').value;
+    const rowPrice = parseFloat(row.querySelector('[data-role="price"]').value) || 0;
+    return rowProductId === productId && Math.abs(rowPrice - price) < 0.005;
+  });
+
+  if (match) {
+    const qtyInput = match.querySelector('[data-role="qty"]');
+    qtyInput.value = (parseInt(qtyInput.value, 10) || 0) + qty;
+    updateRowAmount(match, kind);
+  } else {
+    addItemRow(kind, { product_id: productId, product_name: productName, quantity: qty, unit_price: price, style: "" });
+  }
+  updateBillTotal(kind);
+}
 
 // -------- shared line-item row logic for Purchase & Sale --------
 let itemRowSeq = 0;
