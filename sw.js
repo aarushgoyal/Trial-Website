@@ -1,7 +1,5 @@
-# Stock Manager — sw.js
 
-```javascript
-const CACHE_NAME = "stock-manager-v5";
+const CACHE_NAME = "stock-manager-v6";
 
 const APP_FILES = [
   "./",
