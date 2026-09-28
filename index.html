@@ -81,7 +81,7 @@
   <section class="view" id="view-purchases">
     <div class="view-head modern-head"><div><span class="eyebrow">INCOMING STOCK</span><h2>Purchases</h2><p>Manage your purchase bills and incoming inventory.</p></div><button class="btn primary-lg" id="btnAddPurchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New purchase</button></div>
     <div class="summary-strip"><div><span>Total bills</span><strong id="purchaseCountLabel">—</strong></div><div><span>Completed</span><strong id="purchaseCompletedLabel">—</strong></div><div><span>Pending drafts</span><strong id="purchaseDraftLabel">—</strong></div></div>
-    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Bill No.</th><th>Date</th><th>Dealer</th><th>Items</th><th>Total amount</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody id="purchasesTableBody"></tbody></table></div></div>
+    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Bill No.</th><th>Date</th><th>Dealer</th><th>Items</th><th>Total amount</th><th>Payment</th><th>Status</th></tr></thead><tbody id="purchasesTableBody"></tbody></table></div></div>
   </section>
 
   <section class="view" id="view-sales">
@@ -218,9 +218,16 @@
 
 <div class="modal-backdrop" id="modalDetail">
   <div class="modal">
-    <div class="modal-head"><h3 id="detailTitle">Bill</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <div class="modal-head">
+      <h3 id="detailTitle">Bill</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button type="button" class="icon-btn danger" id="detailDeleteBtn" title="Delete bill" aria-label="Delete bill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+        </button>
+        <button class="modal-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
     <div id="detailBody"></div>
-    <div id="detailEditWrap" style="margin-top:14px;"></div>
   </div>
 </div>
 
