@@ -1,3 +1,4 @@
+
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
@@ -1715,3 +1716,4 @@ function renderDashboard() {
 }
 
 function sum(arr) { return arr.reduce((a, b) => a + Number(b || 0), 0); }
+
