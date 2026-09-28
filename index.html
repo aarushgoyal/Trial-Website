@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=15">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 
@@ -82,18 +81,17 @@
   <section class="view" id="view-purchases">
     <div class="view-head modern-head"><div><span class="eyebrow">INCOMING STOCK</span><h2>Purchases</h2><p>Manage your purchase bills and incoming inventory.</p></div><button class="btn primary-lg" id="btnAddPurchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New purchase</button></div>
     <div class="summary-strip"><div><span>Total bills</span><strong id="purchaseCountLabel">—</strong></div><div><span>Completed</span><strong id="purchaseCompletedLabel">—</strong></div><div><span>Pending drafts</span><strong id="purchaseDraftLabel">—</strong></div></div>
-    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Bill No.</th><th>Date</th><th>Dealer</th><th>Items</th><th>Total amount</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody id="purchasesTableBody"></tbody></table></div></div>
+    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Bill No.</th><th>Date</th><th>Dealer</th><th>Items</th><th>Total amount</th><th>Payment</th><th>Status</th></tr></thead><tbody id="purchasesTableBody"></tbody></table></div></div>
   </section>
 
   <section class="view" id="view-sales">
     <div class="view-head modern-head"><div><span class="eyebrow">OUTGOING STOCK</span><h2>Sales</h2><p>Manage customer sales, payments and completed bills.</p></div><button class="btn primary-lg" id="btnAddSale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New sale</button></div>
     <div class="summary-strip"><div><span>Total bills</span><strong id="salesCountLabel">—</strong></div><div><span>Completed</span><strong id="salesCompletedLabel">—</strong></div><div><span>Pending drafts</span><strong id="salesDraftLabel">—</strong></div></div>
-    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Bill No.</th><th>Date</th><th>Customer</th><th>Items</th><th>Total amount</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody id="salesTableBody"></tbody></table></div></div>
+    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Bill No.</th><th>Date</th><th>Customer</th><th>Items</th><th>Total amount</th><th>Payment</th><th>Status</th></tr></thead><tbody id="salesTableBody"></tbody></table></div></div>
   </section>
 </main>
 
 <!-- ================= MODAL: ADD PRODUCT ================= -->
-
 <div class="modal-backdrop" id="modalProduct">
   <div class="modal">
     <div class="modal-head"><h3 id="productModalTitle">Add product</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
@@ -130,7 +128,6 @@
 </div>
 
 <!-- ================= MODAL: ADD PURCHASE ================= -->
-
 <div class="modal-backdrop" id="modalPurchase">
   <div class="modal">
     <div class="modal-head"><h3 id="purchaseModalTitle">Add purchase bill</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
@@ -148,28 +145,26 @@
         <input type="hidden" id="puPayType" value="cash">
       </div>
 
-  <h3 style="font-size:14px; margin: 18px 0 8px;">Products purchased</h3>
-  <div id="puItems"></div>
-  <div class="row-buttons">
-    <button type="button" class="btn subtle sm" id="puAddItem">+ Add another product</button>
-    <button type="button" class="btn subtle sm" id="puScanBtn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M20 8V6a2 2 0 0 0-2-2h-2M4 16v2a2 2 0 0 0 2 2h2M20 16v2a2 2 0 0 1-2 2h-2M9 9h1v6H9zM12 9h2v6h-2zM16 9h1v6h-1z"/></svg>
-      Scan barcode
-    </button>
-  </div>
+      <h3 style="font-size:14px; margin: 18px 0 8px;">Products purchased</h3>
+      <div id="puItems"></div>
+      <div class="row-buttons">
+        <button type="button" class="btn subtle sm" id="puAddItem">+ Add another product</button>
+        <button type="button" class="btn subtle sm" id="puScanBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M20 8V6a2 2 0 0 0-2-2h-2M4 16v2a2 2 0 0 0 2 2h2M20 16v2a2 2 0 0 1-2 2h-2M9 9h1v6H9zM12 9h2v6h-2zM16 9h1v6h-1z"/></svg>
+          Scan barcode
+        </button>
+      </div>
 
-  <div class="bill-total"><span>Total</span><span id="puTotal">₹0.00</span></div>
-  <div class="modal-actions">
-    <button type="button" class="btn subtle block" id="puDraftBtn">Save as draft</button>
-    <button type="submit" class="btn block" id="puSubmitBtn">Save &amp; complete</button>
-  </div>
-</form>
-
+      <div class="bill-total"><span>Total</span><span id="puTotal">₹0.00</span></div>
+      <div class="modal-actions">
+        <button type="button" class="btn subtle block" id="puDraftBtn">Save as draft</button>
+        <button type="submit" class="btn block" id="puSubmitBtn">Save &amp; complete</button>
+      </div>
+    </form>
   </div>
 </div>
 
 <!-- ================= MODAL: ADD SALE ================= -->
-
 <div class="modal-backdrop" id="modalSale">
   <div class="modal">
     <div class="modal-head"><h3 id="saleModalTitle">Add sale bill</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
@@ -187,30 +182,27 @@
         <input type="hidden" id="saPayType" value="cash">
       </div>
 
-  <h3 style="font-size:14px; margin: 18px 0 8px;">Products sold</h3>
-  <div id="saItems"></div>
-  <div class="row-buttons">
-    <button type="button" class="btn subtle sm" id="saAddItem">+ Add another product</button>
-    <button type="button" class="btn subtle sm" id="saScanBtn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M20 8V6a2 2 0 0 0-2-2h-2M4 16v2a2 2 0 0 0 2 2h2M20 16v2a2 2 0 0 1-2 2h-2M9 9h1v6H9zM12 9h2v6h-2zM16 9h1v6h-1z"/></svg>
-      Scan barcode
-    </button>
-  </div>
+      <h3 style="font-size:14px; margin: 18px 0 8px;">Products sold</h3>
+      <div id="saItems"></div>
+      <div class="row-buttons">
+        <button type="button" class="btn subtle sm" id="saAddItem">+ Add another product</button>
+        <button type="button" class="btn subtle sm" id="saScanBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M20 8V6a2 2 0 0 0-2-2h-2M4 16v2a2 2 0 0 0 2 2h2M20 16v2a2 2 0 0 1-2 2h-2M9 9h1v6H9zM12 9h2v6h-2zM16 9h1v6h-1z"/></svg>
+          Scan barcode
+        </button>
+      </div>
 
-  <div class="bill-total"><span>Total</span><span id="saTotal">₹0.00</span></div>
-  <div class="modal-actions">
-    <button type="button" class="btn subtle block" id="saDraftBtn">Save as draft</button>
-    <button type="submit" class="btn block" id="saSubmitBtn">Save &amp; complete</button>
-  </div>
-</form>
-
+      <div class="bill-total"><span>Total</span><span id="saTotal">₹0.00</span></div>
+      <div class="modal-actions">
+        <button type="button" class="btn subtle block" id="saDraftBtn">Save as draft</button>
+        <button type="submit" class="btn block" id="saSubmitBtn">Save &amp; complete</button>
+      </div>
+    </form>
   </div>
 </div>
 
 <!-- ================= MODAL: BILL DETAIL (view purchase/sale line items) ================= -->
-
 <!-- ================= MODAL: RECYCLE BIN ================= -->
-
 <div class="modal-backdrop" id="modalRecycleBin">
   <div class="modal" style="max-width:640px;">
     <div class="modal-head"><h3>Recycle bin</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
@@ -226,24 +218,13 @@
 
 <div class="modal-backdrop" id="modalDetail">
   <div class="modal">
-    <div class="modal-head detail-modal-head">
-      <h3 id="detailTitle">Bill</h3>
-      <div class="detail-head-actions">
-        <button type="button" class="detail-delete-btn" id="detailDeleteBtn" title="Delete bill" aria-label="Delete bill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
-        </button>
-        <button type="button" class="modal-close" data-close title="Close" aria-label="Close">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-    </div>
+    <div class="modal-head"><h3 id="detailTitle">Bill</h3><div class="detail-head-actions"><button class="icon-btn danger" id="detailDeleteBtn" title="Delete bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div>
     <div id="detailBody"></div>
     <div id="detailEditWrap" style="margin-top:14px;"></div>
   </div>
 </div>
 
 <!-- ================= BARCODE SCANNER OVERLAY ================= -->
-
 <div class="scanner-overlay" id="barcodeScanner">
   <div class="scanner-topbar">
     <span>Scan barcode</span>
@@ -293,12 +274,13 @@
 
 <div class="toast" id="toast"></div>
 
+
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
