@@ -1,3 +1,4 @@
+
 /* ==========================================================
    Design tokens
    ========================================================== */
@@ -565,3 +566,67 @@ main{max-width:none;margin:0;padding:calc(var(--topbar-h) + 34px) 34px 48px calc
   :root{--nav-h:72px}.topbar{position:sticky;left:0;padding:0 13px;height:58px}.topbar-tools{gap:7px}.quick-search{display:none}.topbar .brand{display:flex}.topbar h1{font-size:16px}.topbar .sub{font-size:10px}.nav{top:auto;bottom:0;left:0;right:0;width:100%;height:var(--nav-h);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:row;background:#fff;color:var(--ink);border-top:1px solid var(--line);box-shadow:0 -8px 25px rgba(56,19,36,.1);z-index:90}.nav-brand,.nav-bottom{display:none}.nav-group{display:flex;flex-direction:row;gap:2px;width:100%;justify-content:space-between}.nav-btn{flex:1;justify-content:center;flex-direction:column;gap:3px;padding:6px 2px;border-radius:11px;color:#88727a;font-size:10px}.nav-btn svg{width:19px;height:19px}.nav-btn.active{background:#f9e5ed;color:#b51f5b;box-shadow:none}.nav-btn.active:after{content:"";position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:#b51f5b}.nav-btn{position:relative}main{padding:22px 13px calc(var(--nav-h) + 22px)}.hero-head,.modern-head{align-items:flex-start;flex-direction:column}.hero-head h2,.modern-head h2{font-size:26px}.dash-controls{width:100%}.dash-controls .seg{flex:1}.dash-controls .month-nav{flex:1;justify-content:space-between}.month-nav span{min-width:0}.kpi-grid{grid-template-columns:repeat(2,1fr);gap:9px}.kpi-card{min-height:112px;padding:14px}.kpi-card strong{font-size:20px}.kpi-card small{font-size:10px}.dashboard-grid{gap:12px}.panel{padding:14px}.products-grid{grid-template-columns:repeat(2,1fr);gap:9px}.product-body{padding:10px}.product-photo{aspect-ratio:1}.toolbar{align-items:stretch}.toolbar .search-bar{min-width:100%}.filter-pills{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.filter-pill{white-space:nowrap}.view-toggle{display:none}.stock-summary{grid-template-columns:repeat(2,1fr)}.summary-strip{grid-template-columns:repeat(3,1fr)}.summary-strip>div{padding:10px}.summary-strip strong{font-size:15px}.modern-table{min-width:780px}.table-wrap{overflow:hidden}.modern-table thead th,.modern-table tbody td{padding:10px}.modal{max-height:90vh}.item-row,.item-row.has-style{grid-template-columns:1fr 1fr}.item-row .item-amount{grid-column:1/-1;text-align:right}
 }
 
+
+/* ==========================================================
+   MOBILE BILL LIST + BILL DETAIL
+   Desktop layout is intentionally unchanged.
+   ========================================================== */
+@media (max-width: 760px) {
+  /* The mobile list shows only Date, Total amount and Status. */
+  #view-purchases .modern-table th:nth-child(1),
+  #view-purchases .modern-table td:nth-child(1),
+  #view-purchases .modern-table th:nth-child(3),
+  #view-purchases .modern-table td:nth-child(3),
+  #view-purchases .modern-table th:nth-child(4),
+  #view-purchases .modern-table td:nth-child(4),
+  #view-purchases .modern-table th:nth-child(6),
+  #view-purchases .modern-table td:nth-child(6),
+  #view-sales .modern-table th:nth-child(1),
+  #view-sales .modern-table td:nth-child(1),
+  #view-sales .modern-table th:nth-child(3),
+  #view-sales .modern-table td:nth-child(3),
+  #view-sales .modern-table th:nth-child(4),
+  #view-sales .modern-table td:nth-child(4),
+  #view-sales .modern-table th:nth-child(6),
+  #view-sales .modern-table td:nth-child(6) {
+    display: none;
+  }
+
+  #view-purchases .modern-table,
+  #view-sales .modern-table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  #view-purchases .modern-table th:nth-child(2),
+  #view-purchases .modern-table td:nth-child(2),
+  #view-sales .modern-table th:nth-child(2),
+  #view-sales .modern-table td:nth-child(2) { width: 33%; }
+
+  #view-purchases .modern-table th:nth-child(5),
+  #view-purchases .modern-table td:nth-child(5),
+  #view-sales .modern-table th:nth-child(5),
+  #view-sales .modern-table td:nth-child(5) { width: 34%; text-align: center; }
+
+  #view-purchases .modern-table th:nth-child(7),
+  #view-purchases .modern-table td:nth-child(7),
+  #view-sales .modern-table th:nth-child(7),
+  #view-sales .modern-table td:nth-child(7) { width: 33%; text-align: center; }
+
+  #view-purchases .table-scroll,
+  #view-sales .table-scroll { overflow-x: hidden; }
+
+  /* Mobile bill detail: show Bill No., Date, party, item count and Payment above Status. */
+  .mobile-bill-meta { display: block; }
+  .desktop-bill-date,
+  .desktop-bill-payment { display: none; }
+  .mobile-bill-meta .breakdown-row:last-child { border-bottom: 1px dashed var(--line); }
+
+  .detail-head-actions { display: flex; align-items: center; gap: 8px; }
+}
+
+@media (min-width: 761px) {
+  .mobile-bill-meta { display: none; }
+  .detail-head-actions { display: flex; align-items: center; gap: 8px; }
+}
