@@ -501,25 +501,75 @@ function renderStock() {
 // PURCHASES
 // ==========================================================
 async function loadPurchases() {
-  const { data, error } = await sb.from("purchases").select("*").is("deleted_at", null).order("purchase_date", { ascending: false }).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("purchases")
+    .select("*")
+    .is("deleted_at", null)
+    .order("purchase_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
   if (error) { toast("Couldn't load purchases: " + error.message, true); return; }
+
   purchasesCache = data || [];
+
+  // The number of products/units shown in the table is derived from the
+  // existing purchase_items table; it is not duplicated in purchases.
+  const ids = purchasesCache.map(p => p.id).filter(Boolean);
+  const itemCounts = {};
+  if (ids.length) {
+    const { data: items, error: itemError } = await sb
+      .from("purchase_items")
+      .select("purchase_id, quantity")
+      .in("purchase_id", ids);
+
+    if (!itemError) {
+      (items || []).forEach(item => {
+        itemCounts[item.purchase_id] =
+          (itemCounts[item.purchase_id] || 0) + Number(item.quantity || 0);
+      });
+    }
+  }
+
+  purchasesCache.forEach(p => {
+    p._item_count = itemCounts[p.id] || 0;
+  });
+
   renderPurchases();
+}
+
+function getBillNumber(kind, record, displayIndex, totalRecords) {
+  // bill_no is used if it exists in a newer schema.
+  if (record && record.bill_no) return record.bill_no;
+
+  const prefix = kind === "purchase" ? "P" : "S";
+  const dateValue = kind === "purchase" ? record.purchase_date : record.sale_date;
+  const year = dateValue
+    ? String(dateValue).slice(0, 4)
+    : String(new Date().getFullYear());
+
+  // The table is newest-first, so reverse the display position to get the
+  // oldest-first sequential number. This keeps existing bills numbered
+  // consistently even when bill_no is not stored in the current schema.
+  const sequence = Math.max(1, (totalRecords - displayIndex));
+  return `${prefix}-${year}-${String(sequence).padStart(4, "0")}`;
 }
 
 function renderPurchases() {
   const tbody = document.getElementById("purchasesTableBody");
+
   if (!purchasesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
     return;
   }
-  tbody.innerHTML = purchasesCache.map(p => `
+
+  tbody.innerHTML = purchasesCache.map((p, i) => `
     <tr style="cursor:pointer;" data-action="view-purchase" data-id="${p.id}">
-      <td>${escapeHtml(p.dealer_name)}</td>
+      <td><strong>${escapeHtml(getBillNumber("purchase", p, i, purchasesCache.length))}</strong></td>
       <td>${formatDate(p.purchase_date)}</td>
-      <td><span class="pill ${p.payment_type}">${p.payment_type}</span></td>
-      <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td>${escapeHtml(p.dealer_name || "")}</td>
+      <td>${Number(p._item_count || 0)}</td>
       <td class="num">${money(p.total_amount)}</td>
+      <td><span class="pill ${p.payment_type}">${escapeHtml(p.payment_type || "")}</span></td>
+      <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
       <td>
         <div class="row-actions">
           <button class="icon-btn" data-action="edit-purchase" data-id="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
@@ -534,11 +584,19 @@ function renderPurchases() {
       showBillDetail("purchase", row.dataset.id);
     });
   });
+
   tbody.querySelectorAll('[data-action="edit-purchase"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); openPurchaseModal(btn.dataset.id); });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPurchaseModal(btn.dataset.id);
+    });
   });
+
   tbody.querySelectorAll('[data-action="delete-purchase"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteBill("purchase", btn.dataset.id); });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteBill("purchase", btn.dataset.id);
+    });
   });
 }
 
@@ -600,25 +658,56 @@ function bindPurchaseModal() {
 // SALES
 // ==========================================================
 async function loadSales() {
-  const { data, error } = await sb.from("sales").select("*").is("deleted_at", null).order("sale_date", { ascending: false }).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("sales")
+    .select("*")
+    .is("deleted_at", null)
+    .order("sale_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
   if (error) { toast("Couldn't load sales: " + error.message, true); return; }
+
   salesCache = data || [];
+
+  const ids = salesCache.map(s => s.id).filter(Boolean);
+  const itemCounts = {};
+  if (ids.length) {
+    const { data: items, error: itemError } = await sb
+      .from("sale_items")
+      .select("sale_id, quantity")
+      .in("sale_id", ids);
+
+    if (!itemError) {
+      (items || []).forEach(item => {
+        itemCounts[item.sale_id] =
+          (itemCounts[item.sale_id] || 0) + Number(item.quantity || 0);
+      });
+    }
+  }
+
+  salesCache.forEach(s => {
+    s._item_count = itemCounts[s.id] || 0;
+  });
+
   renderSales();
 }
 
 function renderSales() {
   const tbody = document.getElementById("salesTableBody");
+
   if (!salesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
     return;
   }
-  tbody.innerHTML = salesCache.map(s => `
+
+  tbody.innerHTML = salesCache.map((s, i) => `
     <tr style="cursor:pointer;" data-action="view-sale" data-id="${s.id}">
-      <td>${escapeHtml(s.buyer_name)}</td>
+      <td><strong>${escapeHtml(getBillNumber("sale", s, i, salesCache.length))}</strong></td>
       <td>${formatDate(s.sale_date)}</td>
-      <td><span class="pill ${s.payment_type}">${s.payment_type}</span></td>
-      <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td>${escapeHtml(s.buyer_name || "")}</td>
+      <td>${Number(s._item_count || 0)}</td>
       <td class="num">${money(s.total_amount)}</td>
+      <td><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
+      <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
       <td>
         <div class="row-actions">
           <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
@@ -633,11 +722,19 @@ function renderSales() {
       showBillDetail("sale", row.dataset.id);
     });
   });
+
   tbody.querySelectorAll('[data-action="edit-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); openSaleModal(btn.dataset.id); });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openSaleModal(btn.dataset.id);
+    });
   });
+
   tbody.querySelectorAll('[data-action="delete-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteBill("sale", btn.dataset.id); });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteBill("sale", btn.dataset.id);
+    });
   });
 }
 
@@ -1618,4 +1715,3 @@ function renderDashboard() {
 }
 
 function sum(arr) { return arr.reduce((a, b) => a + Number(b || 0), 0); }
-
