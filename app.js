@@ -1,4 +1,3 @@
-
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
@@ -676,7 +675,7 @@ function renderSales() {
   const tbody = document.getElementById("salesTableBody");
 
   if (!salesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
     return;
   }
 
@@ -689,12 +688,6 @@ function renderSales() {
       <td class="num">${money(s.total_amount)}</td>
       <td><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
       <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
-      <td>
-        <div class="row-actions">
-          <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-          <button class="icon-btn danger" data-action="delete-sale" data-id="${s.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-        </div>
-      </td>
     </tr>`).join("");
 
   tbody.querySelectorAll('[data-action="view-sale"]').forEach(row => {
@@ -704,19 +697,6 @@ function renderSales() {
     });
   });
 
-  tbody.querySelectorAll('[data-action="edit-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openSaleModal(btn.dataset.id);
-    });
-  });
-
-  tbody.querySelectorAll('[data-action="delete-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteBill("sale", btn.dataset.id);
-    });
-  });
 }
 
 function openSaleModal(id) {
