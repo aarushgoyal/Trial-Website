@@ -1,5 +1,5 @@
 
-const CACHE_NAME = "stock-manager-v6";
+const CACHE_NAME = "stock-manager-v7";
 
 const APP_FILES = [
   "./",
