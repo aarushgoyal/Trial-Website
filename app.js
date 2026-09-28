@@ -10,6 +10,9 @@ let isConnected = false;
 let productsCache = [];  // [{id,name,image_url,quantity}]
 let purchasesCache = []; // header rows, newest first
 let salesCache = [];     // header rows, newest first
+let purchaseItemCountCache = {};
+let saleItemCountCache = {};
+let stockDetailProductId = null;
 
 let editingProductId = null;
 let editingPurchaseId = null;
@@ -44,8 +47,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindScanner();
   bindPageExitSafety();
   bindRecycleBin();
-  const sideBin = document.getElementById("btnRecycleBinSide");
-  if (sideBin) sideBin.addEventListener("click", () => document.getElementById("btnRecycleBin")?.click());
 
   const configured = SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT-ID") &&
                       SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes("YOUR-ANON");
@@ -270,37 +271,10 @@ function bindNav() {
   });
 }
 
-let activeProductFilter = "all";
 function bindSearchFilters() {
   document.getElementById("productSearch").addEventListener("input", renderProducts);
   document.getElementById("stockSearch").addEventListener("input", renderStock);
   document.getElementById("stockFilter").addEventListener("change", renderStock);
-  document.querySelectorAll("[data-product-filter]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      activeProductFilter = btn.dataset.productFilter;
-      document.querySelectorAll("[data-product-filter]").forEach(b => b.classList.toggle("active", b === btn));
-      renderProducts();
-    });
-  });
-}
-function openView(view) {
-  const btn = document.querySelector(`.nav-btn[data-view="${view}"]`);
-  if (btn) btn.click();
-}
-function quickSearchApp(value) {
-  const q = String(value || "").trim();
-  if (!q) return;
-  const productView = document.querySelector('.nav-btn[data-view="products"]');
-  if (productView && !document.getElementById("view-products").classList.contains("active")) productView.click();
-  const input = document.getElementById("productSearch");
-  if (input) { input.value = q; renderProducts(); }
-}
-function exportStockCsv() {
-  const rows = [["Product","Quantity","Stock value","Status"]];
-  productsCache.forEach(p => rows.push([p.name, p.quantity, Number(p.quantity || 0), p.quantity === 0 ? "Out of stock" : p.quantity <= LOW_STOCK_THRESHOLD ? "Low stock" : "In stock"]));
-  const csv = rows.map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "stock-export.csv"; a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ==========================================================
@@ -317,10 +291,7 @@ async function loadProducts() {
 function renderProducts() {
   const grid = document.getElementById("productsGrid");
   const q = document.getElementById("productSearch").value.trim().toLowerCase();
-  let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
-  if (activeProductFilter === "active") list = list.filter(p => Number(p.quantity) > LOW_STOCK_THRESHOLD);
-  if (activeProductFilter === "low") list = list.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= LOW_STOCK_THRESHOLD);
-  if (activeProductFilter === "out") list = list.filter(p => Number(p.quantity) === 0);
+  const list = productsCache.filter(p => p.name.toLowerCase().includes(q));
 
   if (!list.length) {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;"><strong>No products yet</strong>Add your first Oriflame product to start tracking stock.</div>`;
@@ -333,7 +304,7 @@ function renderProducts() {
       ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}">`
       : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>`;
     return `
-    <div class="product-card" data-id="${p.id}">
+    <div class="product-card" data-id="${p.id}" data-action="view-stock-detail" role="button" tabindex="0">
       <div class="product-actions">
         <button class="icon-btn" data-action="edit-product" data-id="${p.id}" title="Edit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
@@ -345,7 +316,8 @@ function renderProducts() {
       <div class="product-photo">${photo}</div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
-        <div class="qty-badge ${low ? "low" : ""}">${low ? "⚠ " : ""}${p.quantity} in stock</div>
+        <div class="product-meta">${escapeHtml(p.category || "Uncategorised")}</div>
+        <div class="product-card-bottom"><strong>${money(p.selling_price)}</strong><span class="qty-badge ${low ? "low" : ""}">${low ? "⚠ " : ""}${p.quantity} in stock</span></div>
       </div>
     </div>`;
   }).join("");
@@ -356,8 +328,11 @@ function renderProducts() {
   grid.querySelectorAll('[data-action="edit-product"]').forEach(btn => {
     btn.addEventListener("click", (e) => { e.stopPropagation(); openProductModal(btn.dataset.id); });
   });
+  grid.querySelectorAll('[data-action="view-stock-detail"]').forEach(card => {
+    card.addEventListener("click", () => openStockDetails(card.dataset.id));
+    card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openStockDetails(card.dataset.id); } });
+  });
 }
-
 async function deleteProduct(id) {
   if (!requireConnection()) return;
   if (!confirm("Delete this product? This won't remove past bills, but it will disappear from your product list.")) return;
@@ -380,6 +355,8 @@ function openProductModal(id) {
     document.getElementById("productModalTitle").textContent = "Edit product";
     document.getElementById("pName").value = p.name;
     document.getElementById("pBarcode").value = p.barcode || "";
+    document.getElementById("pCategory").value = p.category || "";
+    document.getElementById("pSellingPrice").value = Number(p.selling_price || 0);
     document.getElementById("pQtyField").style.display = "none"; // quantity is managed via purchases/sales
     document.getElementById("pPhotoHint").textContent = "Choose a new photo only if you want to replace the current one.";
     if (p.image_url) document.getElementById("pPhotoPreview").innerHTML = `<img src="${escapeHtml(p.image_url)}">`;
@@ -387,6 +364,8 @@ function openProductModal(id) {
   } else {
     document.getElementById("productModalTitle").textContent = "Add product";
     document.getElementById("pBarcode").value = "";
+    document.getElementById("pCategory").value = "";
+    document.getElementById("pSellingPrice").value = "0";
     document.getElementById("pQtyField").style.display = "";
     document.getElementById("pPhotoHint").textContent = 'Uploaded to your Supabase storage bucket "product-images".';
     document.getElementById("pSubmitBtn").textContent = "Save product";
@@ -413,6 +392,8 @@ function bindProductModal() {
 
     const name = document.getElementById("pName").value.trim();
     const barcode = document.getElementById("pBarcode").value.trim() || null;
+    const category = document.getElementById("pCategory").value.trim() || null;
+    const selling_price = Math.max(0, parseFloat(document.getElementById("pSellingPrice").value) || 0);
     const dup = findProductByName(name, editingProductId);
     if (dup) { toast(`A product named "${dup.name}" already exists`, true); return; }
     if (barcode) {
@@ -435,14 +416,14 @@ function bindProductModal() {
       }
 
       if (editingProductId) {
-        const update = { name, barcode };
+        const update = { name, barcode, category, selling_price };
         if (image_url) update.image_url = image_url;
         const { error } = await sb.from("products").update(update).eq("id", editingProductId);
         if (error) throw error;
         toast("Product updated");
       } else {
         const qty = parseInt(document.getElementById("pQty").value, 10) || 0;
-        const { error } = await sb.from("products").insert({ name, quantity: qty, image_url: image_url || null, barcode });
+        const { error } = await sb.from("products").insert({ name, quantity: qty, image_url: image_url || null, barcode, category, selling_price });
         if (error) throw error;
         toast("Product added");
       }
@@ -464,38 +445,83 @@ function renderStock() {
   const tbody = document.getElementById("stockTableBody");
   const q = document.getElementById("stockSearch").value.trim().toLowerCase();
   const filter = document.getElementById("stockFilter").value;
-  let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
-  if (filter === "low") list = list.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= LOW_STOCK_THRESHOLD);
-  if (filter === "out") list = list.filter(p => Number(p.quantity) === 0);
 
-  const totalUnits = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
-  const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
-  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
-  const set = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
-  set("stockSummaryProducts", productsCache.length);
-  set("stockSummaryUnits", totalUnits);
-  set("stockSummaryValue", money(stockValue));
-  set("stockSummaryLow", lowCount);
+  let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
+  if (filter === "low") list = list.filter(p => p.quantity <= LOW_STOCK_THRESHOLD);
+  if (filter === "out") list = list.filter(p => p.quantity <= 0);
 
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
     return;
   }
+
   tbody.innerHTML = list.map(p => {
-    const qty = Number(p.quantity || 0);
-    const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
-    const out = qty === 0;
-    const status = out ? "Out of stock" : low ? "Low stock" : "In stock";
-    return `<tr>
-      <td class="name-cell">${p.image_url ? `<img class="row-thumb" src="${escapeHtml(p.image_url)}" alt="">` : `<span class="row-thumb placeholder-thumb">◈</span>`}<div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.barcode || "No barcode")}</small></div></td>
-      <td><strong class="stock-number ${out ? "out" : low ? "low" : ""}">${qty}</strong> units</td>
-      <td>${money(qty)}</td>
-      <td><span class="pill ${out ? "draft" : low ? "low" : "ok"}">${out ? "Out of stock" : low ? "⚠ Low stock" : "In stock"}</span></td>
-      <td><button class="icon-btn" title="Edit product" onclick="openProductModal('${p.id}')">✎</button></td>
+    const low = p.quantity <= LOW_STOCK_THRESHOLD;
+    const out = p.quantity <= 0;
+    const stockValue = Number(p.quantity || 0) * Number(p.selling_price || 0);
+    return `<tr class="stock-row" data-id="${p.id}">
+      <td class="name-cell">
+        ${p.image_url ? `<img class="row-thumb" src="${escapeHtml(p.image_url)}">` : ""}
+        <span><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.barcode || "No barcode")}</small></span>
+      </td>
+      <td>${escapeHtml(p.category || "Uncategorised")}</td>
+      <td class="num" style="${out || low ? "color:var(--bad); font-weight:700;" : ""}">${p.quantity}</td>
+      <td class="num">${money(stockValue)}</td>
+      <td><span class="pill ${out ? "low" : low ? "low" : "ok"}">${out ? "Out of stock" : low ? "⚠ Low stock" : "In stock"}</span></td>
+      <td><button class="btn subtle sm" data-action="stock-details" data-id="${p.id}">View</button></td>
     </tr>`;
   }).join("");
+
+  tbody.querySelectorAll(".stock-row").forEach(row => row.addEventListener("click", e => {
+    if (!e.target.closest("button")) openStockDetails(row.dataset.id);
+  }));
+  tbody.querySelectorAll('[data-action="stock-details"]').forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); openStockDetails(btn.dataset.id); });
+  });
 }
 
+function openStockDetails(id) {
+  if (!requireConnection()) return;
+  const p = productsCache.find(x => x.id === id);
+  if (!p) return;
+  stockDetailProductId = id;
+  const stockValue = Number(p.quantity || 0) * Number(p.selling_price || 0);
+  const low = Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD;
+  const out = Number(p.quantity || 0) <= 0;
+  const photo = p.image_url
+    ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}">`
+    : `<div class="stock-detail-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg></div>`;
+  document.getElementById("stockDetailBody").innerHTML = `
+    <div class="stock-detail-hero">
+      <div class="stock-detail-photo">${photo}</div>
+      <div><h3>${escapeHtml(p.name)}</h3><div class="stock-detail-sku">SKU / Barcode: ${escapeHtml(p.barcode || "Not assigned")}</div></div>
+    </div>
+    <div class="stock-detail-grid">
+      <div><span>Category</span><strong>${escapeHtml(p.category || "Uncategorised")}</strong></div>
+      <div><span>Price</span><strong>${money(p.selling_price)}</strong></div>
+      <div><span>Current Stock</span><strong>${p.quantity}</strong></div>
+      <div><span>Stock Value</span><strong>${money(stockValue)}</strong></div>
+      <div class="wide"><span>Status</span><strong><span class="pill ${out || low ? "low" : "ok"}">${out ? "Out of Stock" : low ? "Low Stock" : "In Stock"}</span></strong></div>
+    </div>`;
+  document.getElementById("stockDetailEditBtn").onclick = () => { closeAllModals(); openProductModal(id); };
+  document.getElementById("stockDetailAdjustBtn").onclick = () => adjustStock(id);
+  openModal("modalStockDetails");
+}
+
+async function adjustStock(id) {
+  if (!requireConnection()) return;
+  const p = productsCache.find(x => x.id === id);
+  if (!p) return;
+  const answer = prompt(`Set current stock for ${p.name}:`, String(p.quantity));
+  if (answer === null) return;
+  const qty = parseInt(answer, 10);
+  if (!Number.isFinite(qty) || qty < 0) { toast("Enter a valid quantity (0 or more)", true); return; }
+  const { error } = await sb.from("products").update({ quantity: qty }).eq("id", id);
+  if (error) { toast("Couldn't adjust stock: " + friendlyError(error), true); return; }
+  toast("Stock adjusted");
+  await loadProducts();
+  openStockDetails(id);
+}
 // ==========================================================
 // PURCHASES
 // ==========================================================
@@ -503,44 +529,46 @@ async function loadPurchases() {
   const { data, error } = await sb.from("purchases").select("*").is("deleted_at", null).order("purchase_date", { ascending: false }).order("created_at", { ascending: false });
   if (error) { toast("Couldn't load purchases: " + error.message, true); return; }
   purchasesCache = data || [];
+  purchaseItemCountCache = {};
+  if (purchasesCache.length) {
+    const { data: items, error: itemErr } = await sb.from("purchase_items").select("purchase_id,quantity").in("purchase_id", purchasesCache.map(p => p.id));
+    if (!itemErr) (items || []).forEach(i => { purchaseItemCountCache[i.purchase_id] = (purchaseItemCountCache[i.purchase_id] || 0) + Number(i.quantity || 0); });
+  }
   renderPurchases();
+}
+
+function billNo(row, prefix) {
+  if (row.bill_no) return row.bill_no;
+  const d = row.purchase_date || row.sale_date || row.created_at || new Date().toISOString();
+  const year = new Date(d).getFullYear();
+  return `${prefix}-${year}-${String(String(row.id || "").replace(/-/g, "").slice(-6)).padStart(6, "0")}`;
 }
 
 function renderPurchases() {
   const tbody = document.getElementById("purchasesTableBody");
   if (!purchasesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
     return;
   }
   tbody.innerHTML = purchasesCache.map(p => `
     <tr style="cursor:pointer;" data-action="view-purchase" data-id="${p.id}">
-      <td>${escapeHtml(p.dealer_name)}</td>
+      <td><strong class="bill-no">${escapeHtml(billNo(p, "P"))}</strong></td>
       <td>${formatDate(p.purchase_date)}</td>
-      <td><span class="pill ${p.payment_type}">${p.payment_type}</span></td>
-      <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td>${escapeHtml(p.dealer_name)}</td>
+      <td class="num">${purchaseItemCountCache[p.id] || 0}</td>
       <td class="num">${money(p.total_amount)}</td>
-      <td>
-        <div class="row-actions">
-          <button class="icon-btn" data-action="edit-purchase" data-id="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-          <button class="icon-btn danger" data-action="delete-purchase" data-id="${p.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-        </div>
-      </td>
+      <td><span class="pill ${p.payment_type}">${p.payment_type}</span></td>
+      <td><span class="pill ${p.status || "completed"}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td><div class="row-actions">
+        <button class="icon-btn" data-action="edit-purchase" data-id="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button class="icon-btn danger" data-action="delete-purchase" data-id="${p.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div></td>
     </tr>`).join("");
 
-  tbody.querySelectorAll('[data-action="view-purchase"]').forEach(row => {
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      showBillDetail("purchase", row.dataset.id);
-    });
-  });
-  tbody.querySelectorAll('[data-action="edit-purchase"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); openPurchaseModal(btn.dataset.id); });
-  });
-  tbody.querySelectorAll('[data-action="delete-purchase"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteBill("purchase", btn.dataset.id); });
-  });
+  tbody.querySelectorAll('[data-action="view-purchase"]').forEach(row => row.addEventListener("click", e => { if (!e.target.closest("button")) showBillDetail("purchase", row.dataset.id); }));
+  tbody.querySelectorAll('[data-action="edit-purchase"]').forEach(btn => btn.addEventListener("click", e => { e.stopPropagation(); openPurchaseModal(btn.dataset.id); }));
+  tbody.querySelectorAll('[data-action="delete-purchase"]').forEach(btn => btn.addEventListener("click", e => { e.stopPropagation(); deleteBill("purchase", btn.dataset.id); }));
 }
-
 function formatDate(d) {
   if (!d) return "";
   return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -602,44 +630,39 @@ async function loadSales() {
   const { data, error } = await sb.from("sales").select("*").is("deleted_at", null).order("sale_date", { ascending: false }).order("created_at", { ascending: false });
   if (error) { toast("Couldn't load sales: " + error.message, true); return; }
   salesCache = data || [];
+  saleItemCountCache = {};
+  if (salesCache.length) {
+    const { data: items, error: itemErr } = await sb.from("sale_items").select("sale_id,quantity").in("sale_id", salesCache.map(s => s.id));
+    if (!itemErr) (items || []).forEach(i => { saleItemCountCache[i.sale_id] = (saleItemCountCache[i.sale_id] || 0) + Number(i.quantity || 0); });
+  }
   renderSales();
 }
 
 function renderSales() {
   const tbody = document.getElementById("salesTableBody");
   if (!salesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
     return;
   }
   tbody.innerHTML = salesCache.map(s => `
     <tr style="cursor:pointer;" data-action="view-sale" data-id="${s.id}">
-      <td>${escapeHtml(s.buyer_name)}</td>
+      <td><strong class="bill-no">${escapeHtml(billNo(s, "S"))}</strong></td>
       <td>${formatDate(s.sale_date)}</td>
-      <td><span class="pill ${s.payment_type}">${s.payment_type}</span></td>
-      <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td>${escapeHtml(s.buyer_name)}</td>
+      <td class="num">${saleItemCountCache[s.id] || 0}</td>
       <td class="num">${money(s.total_amount)}</td>
-      <td>
-        <div class="row-actions">
-          <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-          <button class="icon-btn danger" data-action="delete-sale" data-id="${s.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-        </div>
-      </td>
+      <td><span class="pill ${s.payment_type}">${s.payment_type}</span></td>
+      <td><span class="pill ${s.status || "completed"}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td><div class="row-actions">
+        <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button class="icon-btn danger" data-action="delete-sale" data-id="${s.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div></td>
     </tr>`).join("");
 
-  tbody.querySelectorAll('[data-action="view-sale"]').forEach(row => {
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      showBillDetail("sale", row.dataset.id);
-    });
-  });
-  tbody.querySelectorAll('[data-action="edit-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); openSaleModal(btn.dataset.id); });
-  });
-  tbody.querySelectorAll('[data-action="delete-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteBill("sale", btn.dataset.id); });
-  });
+  tbody.querySelectorAll('[data-action="view-sale"]').forEach(row => row.addEventListener("click", e => { if (!e.target.closest("button")) showBillDetail("sale", row.dataset.id); }));
+  tbody.querySelectorAll('[data-action="edit-sale"]').forEach(btn => btn.addEventListener("click", e => { e.stopPropagation(); openSaleModal(btn.dataset.id); }));
+  tbody.querySelectorAll('[data-action="delete-sale"]').forEach(btn => btn.addEventListener("click", e => { e.stopPropagation(); deleteBill("sale", btn.dataset.id); }));
 }
-
 function openSaleModal(id) {
   if (!requireConnection()) return;
   if (!id && !productsCache.length) { toast("Add at least one product first", true); return; }
@@ -1290,6 +1313,7 @@ async function showBillDetail(kind, id) {
     kind === "purchase" ? `Purchase — ${header.dealer_name}` : `Sale — ${header.buyer_name}`;
 
   document.getElementById("detailBody").innerHTML = `
+    <div class="breakdown-row"><span>Bill No.</span><strong>${escapeHtml(billNo(header, kind === "purchase" ? "P" : "S"))}</strong></div>
     <div class="breakdown-row"><span>Date</span><strong>${formatDate(header.purchase_date || header.sale_date)}</strong></div>
     <div class="breakdown-row"><span>Payment</span><span class="pill ${header.payment_type}">${header.payment_type}</span></div>
     <div class="breakdown-row"><span>Status</span><span class="pill ${header.status}">${header.status === "draft" ? "Draft" : "Completed"}</span></div>
@@ -1597,24 +1621,6 @@ function renderDashboard() {
   // independent of the month/all-time toggle above.
   renderSalesTrendChart(completedSales);
   renderRecentActivity(completedPurchases, completedSales);
-
-  const dashboardSales = salesCash + salesCredit;
-  const dashboardPurchases = purchaseCash + purchaseCredit;
-  const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
-  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
-  const setDash = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
-  setDash("statDashboardSales", money(dashboardSales));
-  setDash("statDashboardPurchases", money(dashboardPurchases));
-  setDash("statStockValue", money(stockValue));
-  setDash("statProductsCount", productsCache.length);
-  setDash("statLowStockCount", lowCount);
-  setDash("purchaseCountLabel", purchasesCache.length);
-  setDash("purchaseCompletedLabel", purchasesCache.filter(p => p.status === "completed").length);
-  setDash("purchaseDraftLabel", purchasesCache.filter(p => p.status === "draft").length);
-  setDash("salesCountLabel", salesCache.length);
-  setDash("salesCompletedLabel", salesCache.filter(s => s.status === "completed").length);
-  setDash("salesDraftLabel", salesCache.filter(s => s.status === "draft").length);
 }
 
 function sum(arr) { return arr.reduce((a, b) => a + Number(b || 0), 0); }
-
