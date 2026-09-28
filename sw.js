@@ -1,5 +1,5 @@
 
-const CACHE_NAME = "stock-manager-v7";
+const CACHE_NAME = "stock-manager-v8";
 
 const APP_FILES = [
   "./",
@@ -12,37 +12,12 @@ const APP_FILES = [
   "./icons/icon-512.png"
 ];
 
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async cache => {
-      for (const file of APP_FILES) {
-        try {
-          await cache.add(file);
-        } catch (error) {
-          console.warn("Could not cache:", file, error);
-        }
-      }
-    })
-  );
-
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
-      )
-    )
-  );
-
-  self.clients.claim();
-});
-
 self.addEventListener("fetch", event => {
+  const url = new URL(event.request.url);
+
+  // Only handle requests belonging to this PWA.
+  if (url.origin !== self.location.origin) return;
+
   if (event.request.method !== "GET") return;
 
   event.respondWith(
@@ -58,9 +33,6 @@ self.addEventListener("fetch", event => {
 
         return response;
       })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });
-
