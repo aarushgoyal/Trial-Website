@@ -1,6 +1,4 @@
 # Stock Manager — app.js
-
-```javascript
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
