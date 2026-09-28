@@ -1,26 +1,28 @@
 {
-  "name": "Stock Manager \u2014 Oriflame Sub-Dealer",
+  "name": "Stock Manager — Oriflame Sub-Dealer",
   "short_name": "Stock Manager",
   "description": "Oriflame Sub-Dealer Stock, Purchase and Sales Manager",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#FBF6F5",
-  "theme_color": "#A6285C",
+  "background_color": "#f8f3f5",
+  "theme_color": "#b51f5b",
   "icons": [
     {
       "src": "./icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
       "src": "./icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ],
-  "id": "./"
+  "id": "./",
+  "categories": [
+    "business",
+    "productivity"
+  ]
 }
