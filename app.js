@@ -44,7 +44,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindScanner();
   bindPageExitSafety();
   bindRecycleBin();
-  bindDetailDeleteButton();
   const sideBin = document.getElementById("btnRecycleBinSide");
   if (sideBin) sideBin.addEventListener("click", () => document.getElementById("btnRecycleBin")?.click());
 
@@ -557,7 +556,7 @@ function renderPurchases() {
   const tbody = document.getElementById("purchasesTableBody");
 
   if (!purchasesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
     return;
   }
 
@@ -570,12 +569,32 @@ function renderPurchases() {
       <td class="num">${money(p.total_amount)}</td>
       <td><span class="pill ${p.payment_type}">${escapeHtml(p.payment_type || "")}</span></td>
       <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" data-action="edit-purchase" data-id="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+          <button class="icon-btn danger" data-action="delete-purchase" data-id="${p.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+        </div>
+      </td>
     </tr>`).join("");
 
   tbody.querySelectorAll('[data-action="view-purchase"]').forEach(row => {
     row.addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
       showBillDetail("purchase", row.dataset.id);
+    });
+  });
+
+  tbody.querySelectorAll('[data-action="edit-purchase"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPurchaseModal(btn.dataset.id);
+    });
+  });
+
+  tbody.querySelectorAll('[data-action="delete-purchase"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteBill("purchase", btn.dataset.id);
     });
   });
 }
@@ -675,7 +694,7 @@ function renderSales() {
   const tbody = document.getElementById("salesTableBody");
 
   if (!salesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
     return;
   }
 
@@ -688,6 +707,12 @@ function renderSales() {
       <td class="num">${money(s.total_amount)}</td>
       <td><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
       <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+          <button class="icon-btn danger" data-action="delete-sale" data-id="${s.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+        </div>
+      </td>
     </tr>`).join("");
 
   tbody.querySelectorAll('[data-action="view-sale"]').forEach(row => {
@@ -697,6 +722,19 @@ function renderSales() {
     });
   });
 
+  tbody.querySelectorAll('[data-action="edit-sale"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openSaleModal(btn.dataset.id);
+    });
+  });
+
+  tbody.querySelectorAll('[data-action="delete-sale"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteBill("sale", btn.dataset.id);
+    });
+  });
 }
 
 function openSaleModal(id) {
@@ -1329,14 +1367,13 @@ async function saveBill(kind, status, opts) {
 
 async function deleteBill(kind, id) {
   if (!requireConnection()) return;
-  if (!confirm("Move this bill to the recycle bin? If it was completed, stock quantities will be adjusted back automatically. You can recover it later from the recycle bin.")) return false;
+  if (!confirm("Move this bill to the recycle bin? If it was completed, stock quantities will be adjusted back automatically. You can recover it later from the recycle bin.")) return;
   const fn = kind === "purchase" ? "delete_purchase" : "delete_sale";
   const arg = kind === "purchase" ? { p_purchase_id: id } : { p_sale_id: id };
   const { error } = await sb.rpc(fn, arg);
-  if (error) { toast("Couldn't delete bill: " + friendlyError(error), true); return false; }
+  if (error) { toast("Couldn't delete bill: " + friendlyError(error), true); return; }
   toast("Bill moved to the recycle bin");
   await refreshAll();
-  return true;
 }
 
 async function showBillDetail(kind, id) {
@@ -1372,14 +1409,7 @@ async function showBillDetail(kind, id) {
     <div class="bill-total"><span>Total</span><span>${money(header.total_amount)}</span></div>
   `;
 
-  const detailDeleteBtn = document.getElementById("detailDeleteBtn");
-  detailDeleteBtn.dataset.kind = kind;
-  detailDeleteBtn.dataset.id = id;
-  detailDeleteBtn.style.display = "inline-flex";
-
-  // Keep the Edit this bill button at the bottom of the bill detail view.
-  const detailEditWrap = document.getElementById("detailEditWrap");
-  detailEditWrap.innerHTML = `<button class="btn block" id="detailEditBtn">Edit this bill</button>`;
+  document.getElementById("detailEditWrap").innerHTML = `<button class="btn block" id="detailEditBtn">Edit this bill</button>`;
   document.getElementById("detailEditBtn").addEventListener("click", () => {
     closeAllModals();
     if (kind === "purchase") openPurchaseModal(id); else openSaleModal(id);
@@ -1391,18 +1421,6 @@ async function showBillDetail(kind, id) {
 // ==========================================================
 // RECYCLE BIN — whole deleted bills, and line items removed from a bill
 // ==========================================================
-function bindDetailDeleteButton() {
-  const btn = document.getElementById("detailDeleteBtn");
-  if (!btn) return;
-  btn.addEventListener("click", async () => {
-    const kind = btn.dataset.kind;
-    const id = btn.dataset.id;
-    if (!kind || !id) return;
-    const deleted = await deleteBill(kind, id);
-    if (deleted) closeAllModals();
-  });
-}
-
 function bindRecycleBin() {
   document.getElementById("btnRecycleBin").addEventListener("click", openRecycleBin);
   document.getElementById("binTabBills").addEventListener("click", () => setBinTab("bills"));
