@@ -1,3 +1,6 @@
+# Stock Manager — app.js
+
+```javascript
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
@@ -43,6 +46,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindDashboardControls();
   bindScanner();
   bindPageExitSafety();
+  bindRecycleBin();
+  const sideBin = document.getElementById("btnRecycleBinSide");
+  if (sideBin) sideBin.addEventListener("click", () => document.getElementById("btnRecycleBin")?.click());
 
   const configured = SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT-ID") &&
                       SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes("YOUR-ANON");
@@ -259,14 +265,45 @@ function bindNav() {
       const view = btn.dataset.view;
       document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
       document.getElementById("view-" + view).classList.add("active");
+      // Always pull fresh numbers when switching tabs — guarantees Stock,
+      // Products, and Dashboard never show a stale quantity after a bill
+      // was saved, whatever the cause of a delay might have been.
+      if (isConnected) refreshAll();
     });
   });
 }
 
+let activeProductFilter = "all";
 function bindSearchFilters() {
   document.getElementById("productSearch").addEventListener("input", renderProducts);
   document.getElementById("stockSearch").addEventListener("input", renderStock);
   document.getElementById("stockFilter").addEventListener("change", renderStock);
+  document.querySelectorAll("[data-product-filter]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeProductFilter = btn.dataset.productFilter;
+      document.querySelectorAll("[data-product-filter]").forEach(b => b.classList.toggle("active", b === btn));
+      renderProducts();
+    });
+  });
+}
+function openView(view) {
+  const btn = document.querySelector(`.nav-btn[data-view="${view}"]`);
+  if (btn) btn.click();
+}
+function quickSearchApp(value) {
+  const q = String(value || "").trim();
+  if (!q) return;
+  const productView = document.querySelector('.nav-btn[data-view="products"]');
+  if (productView && !document.getElementById("view-products").classList.contains("active")) productView.click();
+  const input = document.getElementById("productSearch");
+  if (input) { input.value = q; renderProducts(); }
+}
+function exportStockCsv() {
+  const rows = [["Product","Quantity","Stock value","Status"]];
+  productsCache.forEach(p => rows.push([p.name, p.quantity, Number(p.quantity || 0), p.quantity === 0 ? "Out of stock" : p.quantity <= LOW_STOCK_THRESHOLD ? "Low stock" : "In stock"]));
+  const csv = rows.map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "stock-export.csv"; a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ==========================================================
@@ -283,7 +320,10 @@ async function loadProducts() {
 function renderProducts() {
   const grid = document.getElementById("productsGrid");
   const q = document.getElementById("productSearch").value.trim().toLowerCase();
-  const list = productsCache.filter(p => p.name.toLowerCase().includes(q));
+  let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
+  if (activeProductFilter === "active") list = list.filter(p => Number(p.quantity) > LOW_STOCK_THRESHOLD);
+  if (activeProductFilter === "low") list = list.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= LOW_STOCK_THRESHOLD);
+  if (activeProductFilter === "out") list = list.filter(p => Number(p.quantity) === 0);
 
   if (!list.length) {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;"><strong>No products yet</strong>Add your first Oriflame product to start tracking stock.</div>`;
@@ -427,24 +467,34 @@ function renderStock() {
   const tbody = document.getElementById("stockTableBody");
   const q = document.getElementById("stockSearch").value.trim().toLowerCase();
   const filter = document.getElementById("stockFilter").value;
-
   let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
-  if (filter === "low") list = list.filter(p => p.quantity <= LOW_STOCK_THRESHOLD);
+  if (filter === "low") list = list.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= LOW_STOCK_THRESHOLD);
+  if (filter === "out") list = list.filter(p => Number(p.quantity) === 0);
+
+  const totalUnits = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
+  const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
+  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
+  const set = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
+  set("stockSummaryProducts", productsCache.length);
+  set("stockSummaryUnits", totalUnits);
+  set("stockSummaryValue", money(stockValue));
+  set("stockSummaryLow", lowCount);
 
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="3"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
     return;
   }
-
   tbody.innerHTML = list.map(p => {
-    const low = p.quantity <= LOW_STOCK_THRESHOLD;
+    const qty = Number(p.quantity || 0);
+    const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+    const out = qty === 0;
+    const status = out ? "Out of stock" : low ? "Low stock" : "In stock";
     return `<tr>
-      <td class="name-cell">
-        ${p.image_url ? `<img class="row-thumb" src="${escapeHtml(p.image_url)}">` : ""}
-        ${escapeHtml(p.name)}
-      </td>
-      <td class="num" style="${low ? "color:var(--bad); font-weight:700;" : ""}">${p.quantity}</td>
-      <td><span class="pill ${low ? "low" : "ok"}">${low ? "⚠ Low stock" : "In stock"}</span></td>
+      <td class="name-cell">${p.image_url ? `<img class="row-thumb" src="${escapeHtml(p.image_url)}" alt="">` : `<span class="row-thumb placeholder-thumb">◈</span>`}<div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.barcode || "No barcode")}</small></div></td>
+      <td><strong class="stock-number ${out ? "out" : low ? "low" : ""}">${qty}</strong> units</td>
+      <td>${money(qty)}</td>
+      <td><span class="pill ${out ? "draft" : low ? "low" : "ok"}">${out ? "Out of stock" : low ? "⚠ Low stock" : "In stock"}</span></td>
+      <td><button class="icon-btn" title="Edit product" onclick="openProductModal('${p.id}')">✎</button></td>
     </tr>`;
   }).join("");
 }
@@ -453,7 +503,7 @@ function renderStock() {
 // PURCHASES
 // ==========================================================
 async function loadPurchases() {
-  const { data, error } = await sb.from("purchases").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("purchases").select("*").is("deleted_at", null).order("purchase_date", { ascending: false }).order("created_at", { ascending: false });
   if (error) { toast("Couldn't load purchases: " + error.message, true); return; }
   purchasesCache = data || [];
   renderPurchases();
@@ -502,8 +552,10 @@ function formatDate(d) {
 function openPurchaseModal(id) {
   if (!requireConnection()) return;
 
+  loadProducts(); // refresh the "X left" numbers shown next to product names
   editingPurchaseId = id || null;
   editingPurchaseOriginalQty = {};
+  removedItemsPurchase = [];
   document.getElementById("formPurchase").reset();
   document.getElementById("puItems").innerHTML = "";
 
@@ -550,7 +602,7 @@ function bindPurchaseModal() {
 // SALES
 // ==========================================================
 async function loadSales() {
-  const { data, error } = await sb.from("sales").select("*").order("sale_date", { ascending: false }).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("sales").select("*").is("deleted_at", null).order("sale_date", { ascending: false }).order("created_at", { ascending: false });
   if (error) { toast("Couldn't load sales: " + error.message, true); return; }
   salesCache = data || [];
   renderSales();
@@ -595,8 +647,10 @@ function openSaleModal(id) {
   if (!requireConnection()) return;
   if (!id && !productsCache.length) { toast("Add at least one product first", true); return; }
 
+  loadProducts(); // refresh the "X left" numbers shown next to product names
   editingSaleId = id || null;
   editingSaleOriginalQty = {};
+  removedItemsSale = [];
   document.getElementById("formSale").reset();
   document.getElementById("saItems").innerHTML = "";
 
@@ -761,6 +815,7 @@ function barcodeHints() {
 
   return hints;
 }
+
 async function startScannerCamera() {
   try {
     // Second constructor argument is the pause after a SUCCESSFUL decode
@@ -774,25 +829,21 @@ async function startScannerCamera() {
     if (!devices.length) throw new Error("No camera found on this device.");
     const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
 
-    // A moderate resolution decodes faster per frame than asking for full
-    // HD (more pixels = more work for the decoder on every frame), and
-    // continuous autofocus matters more than raw resolution for reading a
-    // small QR code or barcode up close.
     const constraints = {
-  video: {
-    deviceId: { exact: backCam.deviceId },
-    facingMode: { ideal: "environment" },
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
-    frameRate: { ideal: 30, max: 30 }
-  }
-};
+      video: {
+        deviceId: { exact: backCam.deviceId },
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 30 }
+      }
+    };
     await scannerReader.decodeFromConstraints(constraints, "scannerVideo", (result) => {
-  if (scannerBusy || !result) return;
+      if (scannerBusy || !result) return;
 
-  scannerBusy = true;
-  handleScanResult(result.getText());
-});
+      scannerBusy = true;
+      handleScanResult(result.getText());
+    });
   } catch (err) {
     document.getElementById("scannerStatus").textContent = "Couldn't start the camera: " + (err.message || err);
   }
@@ -894,6 +945,12 @@ function addOrIncrementScannedItem(kind, productId, productName, qty, price) {
 
 // -------- shared line-item row logic for Purchase & Sale --------
 let itemRowSeq = 0;
+
+// Lines that existed in a saved bill and were removed during this edit
+// session — archived into the Recycle Bin when the bill is saved, so
+// nothing just vanishes. Reset each time a bill modal is opened.
+let removedItemsPurchase = [];
+let removedItemsSale = [];
 
 // `existing` (optional): a saved purchase_items/sale_items row, when editing
 function addItemRow(kind, existing) {
@@ -1012,11 +1069,27 @@ function addItemRow(kind, existing) {
     if (withStyle) row.querySelector('[data-role="style"]').value = existing.style || "";
     row.querySelector('[data-role="qty"]').value = existing.quantity;
     row.querySelector('[data-role="price"]').value = existing.unit_price;
+    // Only a row loaded from a saved bill (has a real database id) can be
+    // "removed" in the Recycle Bin sense — a freshly-added row has nothing
+    // saved yet to recover.
+    if (existing.id) row.dataset.origId = existing.id;
   }
 
   row.querySelector('[data-role="qty"]').addEventListener("input", () => updateRowAmount(row, kind));
   row.querySelector('[data-role="price"]').addEventListener("input", () => updateRowAmount(row, kind));
   row.querySelector(".item-remove").addEventListener("click", () => {
+    if (row.dataset.origId) {
+      const removedEntry = {
+        product_id: hiddenInput.value || null,
+        product_name: hiddenInput.dataset.name || "",
+        quantity: parseInt(row.querySelector('[data-role="qty"]').value, 10) || 0,
+        unit_price: parseFloat(row.querySelector('[data-role="price"]').value) || 0
+      };
+      removedEntry.amount = removedEntry.quantity * removedEntry.unit_price;
+      if (kind === "sale") removedEntry.style = row.querySelector('[data-role="style"]')?.value.trim() || "";
+      if (kind === "purchase") removedItemsPurchase.push(removedEntry);
+      else removedItemsSale.push(removedEntry);
+    }
     row.remove();
     updateBillTotal(kind);
   });
@@ -1144,9 +1217,10 @@ async function saveBill(kind, status, opts) {
       if (editingPurchaseId) {
         const { error } = await sb.rpc("update_purchase", {
           p_purchase_id: editingPurchaseId, p_dealer_name: name, p_purchase_date: date,
-          p_payment_type: payType, p_status: status, p_items: items
+          p_payment_type: payType, p_status: status, p_items: items, p_removed_items: removedItemsPurchase
         });
         if (error) throw error;
+        removedItemsPurchase = []; // archived server-side — don't resend on a later save
       } else {
         const { data, error } = await sb.rpc("create_purchase", {
           p_dealer_name: name, p_purchase_date: date, p_payment_type: payType, p_status: status, p_items: items
@@ -1162,9 +1236,10 @@ async function saveBill(kind, status, opts) {
       if (editingSaleId) {
         const { error } = await sb.rpc("update_sale", {
           p_sale_id: editingSaleId, p_buyer_name: name, p_sale_date: date,
-          p_payment_type: payType, p_status: status, p_items: items
+          p_payment_type: payType, p_status: status, p_items: items, p_removed_items: removedItemsSale
         });
         if (error) throw error;
+        removedItemsSale = [];
       } else {
         const { data, error } = await sb.rpc("create_sale", {
           p_buyer_name: name, p_sale_date: date, p_payment_type: payType, p_status: status, p_items: items
@@ -1198,12 +1273,12 @@ async function saveBill(kind, status, opts) {
 
 async function deleteBill(kind, id) {
   if (!requireConnection()) return;
-  if (!confirm("Delete this bill? If it was completed, stock quantities will be adjusted back automatically.")) return;
+  if (!confirm("Move this bill to the recycle bin? If it was completed, stock quantities will be adjusted back automatically. You can recover it later from the recycle bin.")) return;
   const fn = kind === "purchase" ? "delete_purchase" : "delete_sale";
   const arg = kind === "purchase" ? { p_purchase_id: id } : { p_sale_id: id };
   const { error } = await sb.rpc(fn, arg);
   if (error) { toast("Couldn't delete bill: " + friendlyError(error), true); return; }
-  toast("Bill deleted");
+  toast("Bill moved to the recycle bin");
   await refreshAll();
 }
 
@@ -1247,6 +1322,112 @@ async function showBillDetail(kind, id) {
   });
 
   openModal("modalDetail");
+}
+
+// ==========================================================
+// RECYCLE BIN — whole deleted bills, and line items removed from a bill
+// ==========================================================
+function bindRecycleBin() {
+  document.getElementById("btnRecycleBin").addEventListener("click", openRecycleBin);
+  document.getElementById("binTabBills").addEventListener("click", () => setBinTab("bills"));
+  document.getElementById("binTabItems").addEventListener("click", () => setBinTab("items"));
+}
+
+function setBinTab(tab) {
+  document.getElementById("binTabBills").classList.toggle("active", tab === "bills");
+  document.getElementById("binTabItems").classList.toggle("active", tab === "items");
+  document.getElementById("binBillsList").style.display = tab === "bills" ? "" : "none";
+  document.getElementById("binItemsList").style.display = tab === "items" ? "" : "none";
+  document.getElementById("binHint").textContent = tab === "bills"
+    ? "Whole bills you deleted. Recovering one puts it back exactly as it was."
+    : "Products you removed from a bill while editing it. Recovering one adds it back to that same bill.";
+}
+
+async function openRecycleBin() {
+  if (!requireConnection()) return;
+  setBinTab("bills");
+  openModal("modalRecycleBin");
+  await loadRecycleBin();
+}
+
+async function loadRecycleBin() {
+  const [pRes, sRes, iRes] = await Promise.all([
+    sb.from("purchases").select("*").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
+    sb.from("sales").select("*").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
+    sb.from("deleted_line_items").select("*").order("deleted_at", { ascending: false })
+  ]);
+  if (pRes.error || sRes.error || iRes.error) {
+    toast("Couldn't load the recycle bin — make sure you've run the latest schema.sql", true);
+    return;
+  }
+
+  const bills = [
+    ...(pRes.data || []).map(p => ({ kind: "purchase", id: p.id, label: p.dealer_name, date: p.purchase_date, amount: p.total_amount, pay: p.payment_type, deletedAt: p.deleted_at })),
+    ...(sRes.data || []).map(x => ({ kind: "sale", id: x.id, label: x.buyer_name, date: x.sale_date, amount: x.total_amount, pay: x.payment_type, deletedAt: x.deleted_at })),
+  ].sort((a, b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+
+  const billsEl = document.getElementById("binBillsList");
+  billsEl.innerHTML = bills.length
+    ? bills.map(b => `<div class="bin-row">
+        <span>${cap(b.kind)} — ${escapeHtml(b.label)} <span class="pill ${b.pay}" style="margin-left:6px;">${b.pay}</span>
+          <span class="sub">${formatDate(b.date)}</span></span>
+        <span class="right"><strong>${money(b.amount)}</strong>
+          <button class="btn subtle sm" data-action="recover-bill" data-kind="${b.kind}" data-id="${b.id}">Recover</button>
+        </span>
+      </div>`).join("")
+    : `<div class="empty" style="padding:18px;"><strong>Nothing here</strong>Deleted bills will show up here.</div>`;
+  billsEl.querySelectorAll('[data-action="recover-bill"]').forEach(btn => {
+    btn.addEventListener("click", () => recoverBill(btn.dataset.kind, btn.dataset.id));
+  });
+
+  const items = iRes.data || [];
+  const itemsEl = document.getElementById("binItemsList");
+  itemsEl.innerHTML = items.length
+    ? items.map(i => `<div class="bin-row">
+        <span>${escapeHtml(i.product_name)} × ${i.quantity}
+          <span class="sub">From ${cap(i.bill_type)} — ${escapeHtml(i.bill_label)}${i.bill_date ? " (" + formatDate(i.bill_date) + ")" : ""}</span></span>
+        <span class="right"><strong>${money(i.amount)}</strong>
+          <button class="btn subtle sm" data-action="recover-item" data-id="${i.id}">Recover</button>
+          <button class="icon-btn danger" data-action="purge-item" data-id="${i.id}" title="Discard for good">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </span>
+      </div>`).join("")
+    : `<div class="empty" style="padding:18px;"><strong>Nothing here</strong>Products removed from a bill will show up here.</div>`;
+  itemsEl.querySelectorAll('[data-action="recover-item"]').forEach(btn => {
+    btn.addEventListener("click", () => recoverLineItem(btn.dataset.id));
+  });
+  itemsEl.querySelectorAll('[data-action="purge-item"]').forEach(btn => {
+    btn.addEventListener("click", () => purgeLineItem(btn.dataset.id));
+  });
+}
+
+async function recoverBill(kind, id) {
+  if (!requireConnection()) return;
+  const fn = kind === "purchase" ? "recover_purchase" : "recover_sale";
+  const arg = kind === "purchase" ? { p_purchase_id: id } : { p_sale_id: id };
+  const { error } = await sb.rpc(fn, arg);
+  if (error) { toast("Couldn't recover: " + friendlyError(error), true); return; }
+  toast("Bill recovered");
+  await refreshAll();
+  await loadRecycleBin();
+}
+
+async function recoverLineItem(id) {
+  if (!requireConnection()) return;
+  const { error } = await sb.rpc("recover_deleted_line_item", { p_id: id });
+  if (error) { toast("Couldn't recover: " + friendlyError(error), true); return; }
+  toast("Product added back to its bill");
+  await refreshAll();
+  await loadRecycleBin();
+}
+
+async function purgeLineItem(id) {
+  if (!requireConnection()) return;
+  if (!confirm("Discard this removed product for good? It can't be recovered afterwards.")) return;
+  const { error } = await sb.rpc("purge_deleted_line_item", { p_id: id });
+  if (error) { toast("Couldn't discard: " + friendlyError(error), true); return; }
+  await loadRecycleBin();
 }
 
 // ==========================================================
@@ -1419,6 +1600,25 @@ function renderDashboard() {
   // independent of the month/all-time toggle above.
   renderSalesTrendChart(completedSales);
   renderRecentActivity(completedPurchases, completedSales);
+
+  const dashboardSales = salesCash + salesCredit;
+  const dashboardPurchases = purchaseCash + purchaseCredit;
+  const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
+  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
+  const setDash = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
+  setDash("statDashboardSales", money(dashboardSales));
+  setDash("statDashboardPurchases", money(dashboardPurchases));
+  setDash("statStockValue", money(stockValue));
+  setDash("statProductsCount", productsCache.length);
+  setDash("statLowStockCount", lowCount);
+  setDash("purchaseCountLabel", purchasesCache.length);
+  setDash("purchaseCompletedLabel", purchasesCache.filter(p => p.status === "completed").length);
+  setDash("purchaseDraftLabel", purchasesCache.filter(p => p.status === "draft").length);
+  setDash("salesCountLabel", salesCache.length);
+  setDash("salesCompletedLabel", salesCache.filter(s => s.status === "completed").length);
+  setDash("salesDraftLabel", salesCache.filter(s => s.status === "draft").length);
 }
 
 function sum(arr) { return arr.reduce((a, b) => a + Number(b || 0), 0); }
+
+```

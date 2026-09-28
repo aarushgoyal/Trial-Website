@@ -1,3 +1,6 @@
+# Stock Manager — sw.js
+
+```javascript
 const CACHE_NAME = "stock-manager-v5";
 
 const APP_FILES = [
@@ -62,3 +65,4 @@ self.addEventListener("fetch", event => {
       })
   );
 });
+```
