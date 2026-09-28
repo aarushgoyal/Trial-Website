@@ -1,3 +1,4 @@
+
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
@@ -556,10 +557,12 @@ function renderPurchases() {
   const tbody = document.getElementById("purchasesTableBody");
 
   if (!purchasesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>No purchase bills yet</strong>Add a bill when stock arrives from a dealer.</div></td></tr>`;
     return;
   }
 
+  // The outside purchase list has no Edit/Delete action column.
+  // Editing and deleting are available from the opened bill detail.
   tbody.innerHTML = purchasesCache.map((p, i) => `
     <tr style="cursor:pointer;" data-action="view-purchase" data-id="${p.id}">
       <td><strong>${escapeHtml(getBillNumber("purchase", p, i, purchasesCache.length))}</strong></td>
@@ -569,36 +572,12 @@ function renderPurchases() {
       <td class="num">${money(p.total_amount)}</td>
       <td><span class="pill ${p.payment_type}">${escapeHtml(p.payment_type || "")}</span></td>
       <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
-      <td>
-        <div class="row-actions">
-          <button class="icon-btn" data-action="edit-purchase" data-id="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-          <button class="icon-btn danger" data-action="delete-purchase" data-id="${p.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-        </div>
-      </td>
     </tr>`).join("");
 
   tbody.querySelectorAll('[data-action="view-purchase"]').forEach(row => {
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      showBillDetail("purchase", row.dataset.id);
-    });
-  });
-
-  tbody.querySelectorAll('[data-action="edit-purchase"]').forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openPurchaseModal(btn.dataset.id);
-    });
-  });
-
-  tbody.querySelectorAll('[data-action="delete-purchase"]').forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteBill("purchase", btn.dataset.id);
-    });
+    row.addEventListener("click", () => showBillDetail("purchase", row.dataset.id));
   });
 }
-
 function formatDate(d) {
   if (!d) return "";
   return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -694,10 +673,12 @@ function renderSales() {
   const tbody = document.getElementById("salesTableBody");
 
   if (!salesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>No sale bills yet</strong>Add a bill each time you sell to a customer.</div></td></tr>`;
     return;
   }
 
+  // The outside sales list has no Edit/Delete action column.
+  // Editing and deleting are available from the opened bill detail.
   tbody.innerHTML = salesCache.map((s, i) => `
     <tr style="cursor:pointer;" data-action="view-sale" data-id="${s.id}">
       <td><strong>${escapeHtml(getBillNumber("sale", s, i, salesCache.length))}</strong></td>
@@ -707,36 +688,12 @@ function renderSales() {
       <td class="num">${money(s.total_amount)}</td>
       <td><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
       <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
-      <td>
-        <div class="row-actions">
-          <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
-          <button class="icon-btn danger" data-action="delete-sale" data-id="${s.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-        </div>
-      </td>
     </tr>`).join("");
 
   tbody.querySelectorAll('[data-action="view-sale"]').forEach(row => {
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      showBillDetail("sale", row.dataset.id);
-    });
-  });
-
-  tbody.querySelectorAll('[data-action="edit-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openSaleModal(btn.dataset.id);
-    });
-  });
-
-  tbody.querySelectorAll('[data-action="delete-sale"]').forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteBill("sale", btn.dataset.id);
-    });
+    row.addEventListener("click", () => showBillDetail("sale", row.dataset.id));
   });
 }
-
 function openSaleModal(id) {
   if (!requireConnection()) return;
   if (!id && !productsCache.length) { toast("Add at least one product first", true); return; }
@@ -1379,16 +1336,34 @@ async function deleteBill(kind, id) {
 async function showBillDetail(kind, id) {
   const table = kind === "purchase" ? "purchase_items" : "sale_items";
   const fk = kind === "purchase" ? "purchase_id" : "sale_id";
-  const header = (kind === "purchase" ? purchasesCache : salesCache).find(b => b.id === id);
+  const cache = kind === "purchase" ? purchasesCache : salesCache;
+  const header = cache.find(b => b.id === id);
+  if (!header) return;
+
   const { data: items, error } = await sb.from(table).select("*").eq(fk, id).order("created_at");
   if (error) { toast("Couldn't load bill: " + error.message, true); return; }
+
+  const displayIndex = cache.findIndex(b => b.id === id);
+  const billNo = getBillNumber(kind, header, displayIndex < 0 ? 0 : displayIndex, cache.length);
+  const partyLabel = kind === "purchase" ? "Dealer" : "Customer";
+  const partyName = kind === "purchase" ? (header.dealer_name || "") : (header.buyer_name || "");
+  const itemCount = (items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
   document.getElementById("detailTitle").textContent =
     kind === "purchase" ? `Purchase — ${header.dealer_name}` : `Sale — ${header.buyer_name}`;
 
   document.getElementById("detailBody").innerHTML = `
-    <div class="breakdown-row"><span>Date</span><strong>${formatDate(header.purchase_date || header.sale_date)}</strong></div>
-    <div class="breakdown-row"><span>Payment</span><span class="pill ${header.payment_type}">${header.payment_type}</span></div>
+    <!-- These first rows are mobile-only. Desktop keeps its existing compact metadata. -->
+    <div class="mobile-bill-meta">
+      <div class="breakdown-row"><span>Bill No.</span><strong>${escapeHtml(billNo)}</strong></div>
+      <div class="breakdown-row"><span>Date</span><strong>${formatDate(header.purchase_date || header.sale_date)}</strong></div>
+      <div class="breakdown-row"><span>${partyLabel}</span><strong>${escapeHtml(partyName)}</strong></div>
+      <div class="breakdown-row"><span>Items</span><strong>${itemCount}</strong></div>
+      <div class="breakdown-row"><span>Payment</span><span class="pill ${header.payment_type}">${escapeHtml(header.payment_type || "")}</span></div>
+    </div>
+
+    <div class="breakdown-row desktop-bill-date"><span>Date</span><strong>${formatDate(header.purchase_date || header.sale_date)}</strong></div>
+    <div class="breakdown-row desktop-bill-payment"><span>Payment</span><span class="pill ${header.payment_type}">${escapeHtml(header.payment_type || "")}</span></div>
     <div class="breakdown-row"><span>Status</span><span class="pill ${header.status}">${header.status === "draft" ? "Draft" : "Completed"}</span></div>
     <div class="table-wrap" style="margin-top:12px;">
       <div class="table-scroll">
@@ -1409,6 +1384,9 @@ async function showBillDetail(kind, id) {
     <div class="bill-total"><span>Total</span><span>${money(header.total_amount)}</span></div>
   `;
 
+  const deleteBtn = document.getElementById("detailDeleteBtn");
+  deleteBtn.onclick = () => deleteBill(kind, id);
+
   document.getElementById("detailEditWrap").innerHTML = `<button class="btn block" id="detailEditBtn">Edit this bill</button>`;
   document.getElementById("detailEditBtn").addEventListener("click", () => {
     closeAllModals();
@@ -1417,7 +1395,6 @@ async function showBillDetail(kind, id) {
 
   openModal("modalDetail");
 }
-
 // ==========================================================
 // RECYCLE BIN — whole deleted bills, and line items removed from a bill
 // ==========================================================
