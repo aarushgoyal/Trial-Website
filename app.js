@@ -1396,6 +1396,14 @@ async function showBillDetail(kind, id) {
   detailDeleteBtn.dataset.id = id;
   detailDeleteBtn.style.display = "inline-flex";
 
+  // Keep the Edit this bill button at the bottom of the bill detail view.
+  const detailEditWrap = document.getElementById("detailEditWrap");
+  detailEditWrap.innerHTML = `<button class="btn block" id="detailEditBtn">Edit this bill</button>`;
+  document.getElementById("detailEditBtn").addEventListener("click", () => {
+    closeAllModals();
+    if (kind === "purchase") openPurchaseModal(id); else openSaleModal(id);
+  });
+
   openModal("modalDetail");
 }
 
