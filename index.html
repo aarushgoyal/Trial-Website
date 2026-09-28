@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 
@@ -218,15 +218,7 @@
 
 <div class="modal-backdrop" id="modalDetail">
   <div class="modal">
-    <div class="modal-head">
-      <h3 id="detailTitle">Bill</h3>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button type="button" class="icon-btn danger" id="detailDeleteBtn" title="Delete bill" aria-label="Delete bill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
-        </button>
-        <button class="modal-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-      </div>
-    </div>
+    <div class="modal-head"><h3 id="detailTitle">Bill</h3><div class="detail-head-actions"><button class="icon-btn danger" id="detailDeleteBtn" title="Delete bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div>
     <div id="detailBody"></div>
     <div id="detailEditWrap" style="margin-top:14px;"></div>
   </div>
@@ -292,4 +284,3 @@
 <script src="app.js?v=9"></script>
 </body>
 </html>
-
