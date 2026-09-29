@@ -1,4 +1,3 @@
-
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
@@ -1387,7 +1386,18 @@ async function showBillDetail(kind, id) {
   document.getElementById("detailTitle").textContent =
     kind === "purchase" ? `Purchase — ${header.dealer_name}` : `Sale — ${header.buyer_name}`;
 
+  const billIndex = kind === "purchase"
+    ? purchasesCache.findIndex(b => b.id === id)
+    : salesCache.findIndex(b => b.id === id);
+  const billNumber = getBillNumber(
+    kind,
+    header,
+    billIndex >= 0 ? billIndex : 0,
+    kind === "purchase" ? purchasesCache.length : salesCache.length
+  );
+
   document.getElementById("detailBody").innerHTML = `
+    <div class="detail-bill-number"><span>Bill No.</span><strong>${escapeHtml(billNumber)}</strong></div>
     <div class="breakdown-row"><span>Date</span><strong>${formatDate(header.purchase_date || header.sale_date)}</strong></div>
     <div class="breakdown-row"><span>Payment</span><span class="pill ${header.payment_type}">${header.payment_type}</span></div>
     <div class="breakdown-row"><span>Status</span><span class="pill ${header.status}">${header.status === "draft" ? "Draft" : "Completed"}</span></div>
@@ -1715,3 +1725,4 @@ function renderDashboard() {
 }
 
 function sum(arr) { return arr.reduce((a, b) => a + Number(b || 0), 0); }
+
