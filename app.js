@@ -710,7 +710,7 @@ function renderPurchases() {
       <td class="num">${money(p.total_amount)}</td>
       <td><span class="pill ${p.payment_type}">${escapeHtml(p.payment_type || "")}</span></td>
       <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
-      <td>
+      <td class="actions-col">
         <div class="row-actions">
           <button class="icon-btn" data-action="edit-purchase" data-id="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
           <button class="icon-btn danger" data-action="delete-purchase" data-id="${p.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
@@ -848,7 +848,7 @@ function renderSales() {
       <td class="num">${money(s.total_amount)}</td>
       <td><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
       <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
-      <td>
+      <td class="actions-col">
         <div class="row-actions">
           <button class="icon-btn" data-action="edit-sale" data-id="${s.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
           <button class="icon-btn danger" data-action="delete-sale" data-id="${s.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
@@ -1514,6 +1514,7 @@ async function deleteBill(kind, id) {
   const { error } = await sb.rpc(fn, arg);
   if (error) { toast("Couldn't delete bill: " + friendlyError(error), true); return; }
   toast("Bill moved to the recycle bin");
+  closeAllModals(); // no-op if the detail view wasn't open
   await refreshAll();
 }
 
@@ -1555,6 +1556,11 @@ async function showBillDetail(kind, id) {
     closeAllModals();
     if (kind === "purchase") openPurchaseModal(id); else openSaleModal(id);
   });
+
+  // Mobile-only header delete button (desktop keeps the pencil/trash icons
+  // in the table's Actions column instead — see the actions-col CSS rule)
+  const deleteBtn = document.getElementById("detailDeleteBtn");
+  deleteBtn.onclick = () => deleteBill(kind, id);
 
   openModal("modalDetail");
 }
