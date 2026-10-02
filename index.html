@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 
@@ -75,7 +75,7 @@
     <div class="view-head modern-head"><div><span class="eyebrow">INVENTORY</span><h2>Stock</h2><p>Monitor quantity, stock value and reorder status at a glance.</p></div><button class="btn ghost" type="button" onclick="exportStockCsv()">⇩ Export</button></div>
     <div class="stock-summary"><div><span>Products</span><strong id="stockSummaryProducts">0</strong></div><div><span>Units in stock</span><strong id="stockSummaryUnits">0</strong></div><div><span>Stock value</span><strong id="stockSummaryValue">₹0</strong></div><div class="warn"><span>Needs attention</span><strong id="stockSummaryLow">0</strong></div></div>
     <div class="toolbar"><div class="search-bar"><span>⌕</span><input type="text" id="stockSearch" placeholder="Search products…"></div><select id="stockFilter"><option value="all">All products</option><option value="low">Low stock</option><option value="out">Out of stock</option></select></div>
-    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Product</th><th>Current stock</th><th>Stock value</th><th>Status</th><th>Actions</th></tr></thead><tbody id="stockTableBody"></tbody></table></div></div>
+    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Product</th><th>Category</th><th>Current stock</th><th>Stock value</th><th>Status</th><th>Actions</th></tr></thead><tbody id="stockTableBody"></tbody></table></div></div>
   </section>
 
   <section class="view" id="view-purchases">
@@ -113,6 +113,16 @@
           </button>
         </div>
         <div class="hint">Lets you look this product up by scanning it in Purchases/Sales.</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Category (optional)</label>
+          <input type="text" id="pCategory" placeholder="e.g. Skin Care">
+        </div>
+        <div class="field">
+          <label>Price (optional)</label>
+          <input type="number" id="pPrice" min="0" step="0.01" placeholder="0.00">
+        </div>
       </div>
       <div class="field">
         <label>Photo (optional)</label>
@@ -201,7 +211,48 @@
   </div>
 </div>
 
-<!-- ================= MODAL: BILL DETAIL (view purchase/sale line items) ================= -->
+<!-- ================= MODAL: STOCK DETAILS ================= -->
+<div class="modal-backdrop" id="modalStockDetail">
+  <div class="modal">
+    <div class="modal-head"><h3>Stock Details</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <div class="stock-detail-hero">
+      <div class="stock-detail-photo" id="sdPhoto"></div>
+      <div>
+        <div class="stock-detail-name" id="sdName"></div>
+        <div class="stock-detail-sku" id="sdSku"></div>
+      </div>
+    </div>
+    <div class="breakdown-row"><span>Category</span><strong id="sdCategory">—</strong></div>
+    <div class="breakdown-row"><span>Price</span><span id="sdPriceWrap"></span></div>
+    <div class="breakdown-row"><span>Current stock</span><strong id="sdQty">0</strong></div>
+    <div class="breakdown-row total-row"><span>Stock value</span><strong id="sdValue">₹0</strong></div>
+    <div class="breakdown-row"><span>Status</span><span class="pill" id="sdStatus">In stock</span></div>
+    <div class="modal-actions">
+      <button type="button" class="btn subtle block" id="sdEditProductBtn">Edit Product</button>
+      <button type="button" class="btn block" id="sdAdjustStockBtn">Adjust Stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL: ADJUST STOCK ================= -->
+<div class="modal-backdrop" id="modalAdjustStock">
+  <div class="modal">
+    <div class="modal-head"><h3>Adjust Stock</h3><button class="modal-close" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+    <form id="formAdjustStock">
+      <p class="hint" style="margin:0 0 14px;">Adjusting <strong id="asProductLabel">this product</strong>'s quantity directly — for corrections like damage, loss, or a recount. This does not create a purchase or sale bill.</p>
+      <div class="field">
+        <label>New quantity</label>
+        <input type="number" id="asNewQty" min="0" required>
+      </div>
+      <div class="field">
+        <label>Reason (optional)</label>
+        <input type="text" id="asReason" placeholder="e.g. Damaged, recount, correction">
+      </div>
+      <button type="submit" class="btn block">Save adjustment</button>
+    </form>
+  </div>
+</div>
+
 <!-- ================= MODAL: RECYCLE BIN ================= -->
 <div class="modal-backdrop" id="modalRecycleBin">
   <div class="modal" style="max-width:640px;">
@@ -273,14 +324,11 @@
 </div>
 
 <div class="toast" id="toast"></div>
-
-
-<div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
