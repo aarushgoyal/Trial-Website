@@ -584,3 +584,16 @@ main{max-width:none;margin:0;padding:calc(var(--topbar-h) + 34px) 34px 48px calc
 .product-category{ font-size:11px; color: var(--ink-faint); margin-top:2px; }
 .product-card{ cursor:pointer; }
 tr.clickable-row{ cursor:pointer; }
+
+/* ==========================================================
+   Mobile-only: Purchases/Sales tables drop the Actions column
+   (edit is reached by opening the bill, at the bottom; delete
+   moves to the bill-detail header instead — see below)
+   ========================================================== */
+.modal-head-actions{ display:flex; align-items:center; gap:8px; }
+.detail-delete-btn{ display:none; }
+
+@media (max-width: 760px){
+  .actions-col{ display:none; }
+  .detail-delete-btn{ display:flex; }
+}
