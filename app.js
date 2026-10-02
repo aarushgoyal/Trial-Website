@@ -1,4 +1,3 @@
-
 // ==========================================================
 // Oriflame Sub-Dealer Stock Manager — app logic
 // ==========================================================
@@ -45,6 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindScanner();
   bindPageExitSafety();
   bindRecycleBin();
+  bindStockDetailModal();
+  bindAdjustStockModal();
   const sideBin = document.getElementById("btnRecycleBinSide");
   if (sideBin) sideBin.addEventListener("click", () => document.getElementById("btnRecycleBin")?.click());
 
@@ -297,8 +298,11 @@ function quickSearchApp(value) {
   if (input) { input.value = q; renderProducts(); }
 }
 function exportStockCsv() {
-  const rows = [["Product","Quantity","Stock value","Status"]];
-  productsCache.forEach(p => rows.push([p.name, p.quantity, Number(p.quantity || 0), p.quantity === 0 ? "Out of stock" : p.quantity <= LOW_STOCK_THRESHOLD ? "Low stock" : "In stock"]));
+  const rows = [["Product","Category","Quantity","Price","Stock value","Status"]];
+  productsCache.forEach(p => {
+    const price = Number(p.price || 0);
+    rows.push([p.name, p.category || "", p.quantity, price, Number(p.quantity || 0) * price, p.quantity === 0 ? "Out of stock" : p.quantity <= LOW_STOCK_THRESHOLD ? "Low stock" : "In stock"]);
+  });
   const csv = rows.map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "stock-export.csv"; a.click(); URL.revokeObjectURL(a.href);
@@ -334,7 +338,7 @@ function renderProducts() {
       ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}">`
       : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>`;
     return `
-    <div class="product-card" data-id="${p.id}">
+    <div class="product-card" data-id="${p.id}" data-action="open-stock-detail">
       <div class="product-actions">
         <button class="icon-btn" data-action="edit-product" data-id="${p.id}" title="Edit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
@@ -346,6 +350,7 @@ function renderProducts() {
       <div class="product-photo">${photo}</div>
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
+        ${p.category ? `<div class="product-category">${escapeHtml(p.category)}</div>` : ""}
         <div class="qty-badge ${low ? "low" : ""}">${low ? "⚠ " : ""}${p.quantity} in stock</div>
       </div>
     </div>`;
@@ -356,6 +361,12 @@ function renderProducts() {
   });
   grid.querySelectorAll('[data-action="edit-product"]').forEach(btn => {
     btn.addEventListener("click", (e) => { e.stopPropagation(); openProductModal(btn.dataset.id); });
+  });
+  grid.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      openStockDetail(card.dataset.id);
+    });
   });
 }
 
@@ -381,6 +392,8 @@ function openProductModal(id) {
     document.getElementById("productModalTitle").textContent = "Edit product";
     document.getElementById("pName").value = p.name;
     document.getElementById("pBarcode").value = p.barcode || "";
+    document.getElementById("pCategory").value = p.category || "";
+    document.getElementById("pPrice").value = (p.price === null || p.price === undefined) ? "" : p.price;
     document.getElementById("pQtyField").style.display = "none"; // quantity is managed via purchases/sales
     document.getElementById("pPhotoHint").textContent = "Choose a new photo only if you want to replace the current one.";
     if (p.image_url) document.getElementById("pPhotoPreview").innerHTML = `<img src="${escapeHtml(p.image_url)}">`;
@@ -388,6 +401,8 @@ function openProductModal(id) {
   } else {
     document.getElementById("productModalTitle").textContent = "Add product";
     document.getElementById("pBarcode").value = "";
+    document.getElementById("pCategory").value = "";
+    document.getElementById("pPrice").value = "";
     document.getElementById("pQtyField").style.display = "";
     document.getElementById("pPhotoHint").textContent = 'Uploaded to your Supabase storage bucket "product-images".';
     document.getElementById("pSubmitBtn").textContent = "Save product";
@@ -414,6 +429,10 @@ function bindProductModal() {
 
     const name = document.getElementById("pName").value.trim();
     const barcode = document.getElementById("pBarcode").value.trim() || null;
+    const category = document.getElementById("pCategory").value.trim() || null;
+    const priceRaw = document.getElementById("pPrice").value;
+    const price = priceRaw === "" ? null : parseFloat(priceRaw);
+    if (price !== null && (isNaN(price) || price < 0)) { toast("Enter a valid price", true); return; }
     const dup = findProductByName(name, editingProductId);
     if (dup) { toast(`A product named "${dup.name}" already exists`, true); return; }
     if (barcode) {
@@ -436,14 +455,14 @@ function bindProductModal() {
       }
 
       if (editingProductId) {
-        const update = { name, barcode };
+        const update = { name, barcode, category, price };
         if (image_url) update.image_url = image_url;
         const { error } = await sb.from("products").update(update).eq("id", editingProductId);
         if (error) throw error;
         toast("Product updated");
       } else {
         const qty = parseInt(document.getElementById("pQty").value, 10) || 0;
-        const { error } = await sb.from("products").insert({ name, quantity: qty, image_url: image_url || null, barcode });
+        const { error } = await sb.from("products").insert({ name, quantity: qty, image_url: image_url || null, barcode, category, price });
         if (error) throw error;
         toast("Product added");
       }
@@ -471,7 +490,7 @@ function renderStock() {
 
   const totalUnits = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
   const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
-  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
+  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0) * Number(p.price || 0), 0);
   const set = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
   set("stockSummaryProducts", productsCache.length);
   set("stockSummaryUnits", totalUnits);
@@ -479,22 +498,143 @@ function renderStock() {
   set("stockSummaryLow", lowCount);
 
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => {
     const qty = Number(p.quantity || 0);
     const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
     const out = qty === 0;
-    const status = out ? "Out of stock" : low ? "Low stock" : "In stock";
-    return `<tr>
+    const rowValue = qty * Number(p.price || 0);
+    return `<tr class="clickable-row" data-id="${p.id}">
       <td class="name-cell">${p.image_url ? `<img class="row-thumb" src="${escapeHtml(p.image_url)}" alt="">` : `<span class="row-thumb placeholder-thumb">◈</span>`}<div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.barcode || "No barcode")}</small></div></td>
+      <td>${escapeHtml(p.category || "—")}</td>
       <td><strong class="stock-number ${out ? "out" : low ? "low" : ""}">${qty}</strong> units</td>
-      <td>${money(qty)}</td>
+      <td>${money(rowValue)}</td>
       <td><span class="pill ${out ? "draft" : low ? "low" : "ok"}">${out ? "Out of stock" : low ? "⚠ Low stock" : "In stock"}</span></td>
-      <td><button class="icon-btn" title="Edit product" onclick="openProductModal('${p.id}')">✎</button></td>
+      <td><button class="icon-btn" title="Edit product" data-action="edit-product" data-id="${p.id}">✎</button></td>
     </tr>`;
   }).join("");
+
+  tbody.querySelectorAll('[data-action="edit-product"]').forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); openProductModal(btn.dataset.id); });
+  });
+  tbody.querySelectorAll("tr.clickable-row").forEach(row => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      openStockDetail(row.dataset.id);
+    });
+  });
+}
+
+// ==========================================================
+// STOCK DETAILS  (opened by clicking a product card or a Stock row)
+// ==========================================================
+let stockDetailProductId = null;
+
+function bindStockDetailModal() {
+  document.getElementById("sdEditProductBtn").addEventListener("click", () => {
+    const id = stockDetailProductId;
+    closeAllModals();
+    openProductModal(id);
+  });
+  document.getElementById("sdAdjustStockBtn").addEventListener("click", () => openAdjustStock(stockDetailProductId));
+}
+
+function renderStockDetailPrice(p) {
+  const wrap = document.getElementById("sdPriceWrap");
+  const hasPrice = p.price !== null && p.price !== undefined && p.price !== "";
+  wrap.innerHTML = hasPrice
+    ? `<strong>${money(p.price)}</strong> <button type="button" class="text-btn" data-action="edit-price">Edit</button>`
+    : `<span style="color:var(--ink-faint);">Not set</span> <button type="button" class="text-btn" data-action="edit-price">Add price</button>`;
+
+  wrap.querySelector('[data-action="edit-price"]').addEventListener("click", () => {
+    wrap.innerHTML = `<input type="number" id="sdPriceInput" min="0" step="0.01" value="${hasPrice ? p.price : ""}" placeholder="0.00">
+      <button type="button" class="btn sm" id="sdPriceSaveBtn">Save</button>`;
+    const input = document.getElementById("sdPriceInput");
+    input.focus();
+    document.getElementById("sdPriceSaveBtn").addEventListener("click", async () => {
+      const newPrice = parseFloat(input.value);
+      if (isNaN(newPrice) || newPrice < 0) { toast("Enter a valid price", true); return; }
+      if (!requireConnection()) return;
+      const { error } = await sb.from("products").update({ price: newPrice }).eq("id", p.id);
+      if (error) { toast("Couldn't save price: " + friendlyError(error), true); return; }
+      toast("Price saved");
+      await loadProducts();
+      const updated = productsCache.find(x => x.id === p.id);
+      if (updated) openStockDetail(updated.id); // re-render this screen with the fresh value
+      renderDashboard();
+    });
+  });
+}
+
+function openStockDetail(id) {
+  const p = productsCache.find(x => x.id === id);
+  if (!p) return;
+  stockDetailProductId = id;
+
+  const qty = Number(p.quantity || 0);
+  const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+  const out = qty === 0;
+  const status = out ? "Out of stock" : low ? "⚠ Low stock" : "In stock";
+  const statusClass = out ? "draft" : low ? "low" : "ok";
+
+  document.getElementById("sdPhoto").innerHTML = p.image_url
+    ? `<img src="${escapeHtml(p.image_url)}" alt="">`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>`;
+  document.getElementById("sdName").textContent = p.name;
+  const skuEl = document.getElementById("sdSku");
+  if (p.barcode) { skuEl.textContent = "SKU: " + p.barcode; skuEl.style.display = ""; }
+  else { skuEl.textContent = ""; skuEl.style.display = "none"; }
+  document.getElementById("sdCategory").textContent = p.category || "—";
+  document.getElementById("sdQty").textContent = `${qty} units`;
+  document.getElementById("sdValue").textContent = money(qty * Number(p.price || 0));
+  const statusEl = document.getElementById("sdStatus");
+  statusEl.textContent = status;
+  statusEl.className = "pill " + statusClass;
+  renderStockDetailPrice(p);
+
+  openModal("modalStockDetail");
+}
+
+function openAdjustStock(id) {
+  const p = productsCache.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById("asProductLabel").textContent = p.name;
+  document.getElementById("asNewQty").value = p.quantity;
+  document.getElementById("asReason").value = "";
+  document.getElementById("formAdjustStock").dataset.productId = id;
+  closeAllModals();
+  openModal("modalAdjustStock");
+}
+
+function bindAdjustStockModal() {
+  document.getElementById("formAdjustStock").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!requireConnection()) return;
+    const id = e.target.dataset.productId;
+    const p = productsCache.find(x => x.id === id);
+    if (!p) return;
+    const newQty = parseInt(document.getElementById("asNewQty").value, 10);
+    if (isNaN(newQty) || newQty < 0) { toast("Enter a valid quantity", true); return; }
+    const reason = document.getElementById("asReason").value.trim() || null;
+
+    const { error } = await sb.from("products").update({ quantity: newQty }).eq("id", id);
+    if (error) { toast("Couldn't adjust stock: " + friendlyError(error), true); return; }
+
+    // Best-effort audit log — if the stock_adjustments table hasn't been
+    // created yet, the quantity change above still succeeds regardless.
+    try {
+      await sb.from("stock_adjustments").insert({
+        product_id: id, product_name: p.name,
+        previous_quantity: p.quantity, new_quantity: newQty, reason
+      });
+    } catch (e2) { /* non-fatal */ }
+
+    toast("Stock adjusted");
+    closeAllModals();
+    await refreshAll();
+  });
 }
 
 // ==========================================================
@@ -1699,7 +1839,7 @@ function renderDashboard() {
   const dashboardSales = salesCash + salesCredit;
   const dashboardPurchases = purchaseCash + purchaseCredit;
   const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
-  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
+  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0) * Number(p.price || 0), 0);
   const setDash = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
   setDash("statDashboardSales", money(dashboardSales));
   setDash("statDashboardPurchases", money(dashboardPurchases));
