@@ -597,3 +597,7 @@ tr.clickable-row{ cursor:pointer; }
   .actions-col{ display:none; }
   .detail-delete-btn{ display:flex; }
 }
+
+@media (max-width: 760px){
+  .mobile-hide-col{ display:none; }
+}
