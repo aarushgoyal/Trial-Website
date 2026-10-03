@@ -601,3 +601,11 @@ tr.clickable-row{ cursor:pointer; }
 @media (max-width: 760px){
   .mobile-hide-col{ display:none; }
 }
+
+/* Purchases/Sales tables show far fewer columns on mobile (see
+   .mobile-hide-col), so the generic .modern-table{min-width:780px} rule
+   above stretches their remaining 3 columns across that width, leaving a
+   huge gap before Status. These two tables fit the real screen width instead. */
+@media (max-width: 760px){
+  .bills-table{ min-width: 0; width: 100%; table-layout: auto; }
+}
