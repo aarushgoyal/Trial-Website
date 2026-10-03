@@ -703,12 +703,12 @@ function renderPurchases() {
 
   tbody.innerHTML = purchasesCache.map((p, i) => `
     <tr style="cursor:pointer;" data-action="view-purchase" data-id="${p.id}">
-      <td><strong>${escapeHtml(getBillNumber("purchase", p, i, purchasesCache.length))}</strong></td>
+      <td class="mobile-hide-col"><strong>${escapeHtml(getBillNumber("purchase", p, i, purchasesCache.length))}</strong></td>
       <td>${formatDate(p.purchase_date)}</td>
-      <td>${escapeHtml(p.dealer_name || "")}</td>
-      <td>${Number(p._item_count || 0)}</td>
+      <td class="mobile-hide-col">${escapeHtml(p.dealer_name || "")}</td>
+      <td class="mobile-hide-col">${Number(p._item_count || 0)}</td>
       <td class="num">${money(p.total_amount)}</td>
-      <td><span class="pill ${p.payment_type}">${escapeHtml(p.payment_type || "")}</span></td>
+      <td class="mobile-hide-col"><span class="pill ${p.payment_type}">${escapeHtml(p.payment_type || "")}</span></td>
       <td><span class="pill ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</span></td>
       <td class="actions-col">
         <div class="row-actions">
@@ -841,12 +841,12 @@ function renderSales() {
 
   tbody.innerHTML = salesCache.map((s, i) => `
     <tr style="cursor:pointer;" data-action="view-sale" data-id="${s.id}">
-      <td><strong>${escapeHtml(getBillNumber("sale", s, i, salesCache.length))}</strong></td>
+      <td class="mobile-hide-col"><strong>${escapeHtml(getBillNumber("sale", s, i, salesCache.length))}</strong></td>
       <td>${formatDate(s.sale_date)}</td>
-      <td>${escapeHtml(s.buyer_name || "")}</td>
-      <td>${Number(s._item_count || 0)}</td>
+      <td class="mobile-hide-col">${escapeHtml(s.buyer_name || "")}</td>
+      <td class="mobile-hide-col">${Number(s._item_count || 0)}</td>
       <td class="num">${money(s.total_amount)}</td>
-      <td><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
+      <td class="mobile-hide-col"><span class="pill ${s.payment_type}">${escapeHtml(s.payment_type || "")}</span></td>
       <td><span class="pill ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</span></td>
       <td class="actions-col">
         <div class="row-actions">
@@ -1528,8 +1528,15 @@ async function showBillDetail(kind, id) {
   document.getElementById("detailTitle").textContent =
     kind === "purchase" ? `Purchase — ${header.dealer_name}` : `Sale — ${header.buyer_name}`;
 
+  const cacheArr = kind === "purchase" ? purchasesCache : salesCache;
+  const idx = cacheArr.findIndex(b => b.id === id);
+  const billNo = getBillNumber(kind, header, idx, cacheArr.length);
+  const itemCount = items ? items.length : Number(header._item_count || 0);
+
   document.getElementById("detailBody").innerHTML = `
+    <div class="breakdown-row"><span>Bill no.</span><strong>${escapeHtml(billNo)}</strong></div>
     <div class="breakdown-row"><span>Date</span><strong>${formatDate(header.purchase_date || header.sale_date)}</strong></div>
+    <div class="breakdown-row"><span>Items</span><strong>${itemCount}</strong></div>
     <div class="breakdown-row"><span>Payment</span><span class="pill ${header.payment_type}">${header.payment_type}</span></div>
     <div class="breakdown-row"><span>Status</span><span class="pill ${header.status}">${header.status === "draft" ? "Draft" : "Completed"}</span></div>
     <div class="table-wrap" style="margin-top:12px;">
