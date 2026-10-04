@@ -46,6 +46,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindRecycleBin();
   bindStockDetailModal();
   bindAdjustStockModal();
+  bindProductViewToggle();
   const sideBin = document.getElementById("btnRecycleBinSide");
   if (sideBin) sideBin.addEventListener("click", () => document.getElementById("btnRecycleBin")?.click());
 
@@ -275,8 +276,6 @@ function bindNav() {
 let activeProductFilter = "all";
 function bindSearchFilters() {
   document.getElementById("productSearch").addEventListener("input", renderProducts);
-  document.getElementById("stockSearch").addEventListener("input", renderStock);
-  document.getElementById("stockFilter").addEventListener("change", renderStock);
   document.querySelectorAll("[data-product-filter]").forEach(btn => {
     btn.addEventListener("click", () => {
       activeProductFilter = btn.dataset.productFilter;
@@ -316,24 +315,42 @@ async function loadProducts() {
   if (error) { toast("Couldn't load products: " + error.message, true); return; }
   productsCache = data || [];
   renderProducts();
-  renderStock();
 }
 
+let productViewMode = "grid"; // 'grid' | 'list'
+
 function renderProducts() {
-  const grid = document.getElementById("productsGrid");
   const q = document.getElementById("productSearch").value.trim().toLowerCase();
   let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
   if (activeProductFilter === "active") list = list.filter(p => Number(p.quantity) > LOW_STOCK_THRESHOLD);
   if (activeProductFilter === "low") list = list.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= LOW_STOCK_THRESHOLD);
   if (activeProductFilter === "out") list = list.filter(p => Number(p.quantity) === 0);
 
+  // Stock KPIs — merged in from the old standalone Stock page, always
+  // reflecting the full catalogue regardless of the current search/filter.
+  const totalUnits = productsCache.reduce((n, p) => n + Number(p.quantity || 0), 0);
+  const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
+  const stockValue = productsCache.reduce((n, p) => n + Number(p.quantity || 0) * Number(p.price || 0), 0);
+  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  set("stockSummaryProducts", productsCache.length);
+  set("stockSummaryUnits", totalUnits);
+  set("stockSummaryValue", money(stockValue));
+  set("stockSummaryLow", lowCount);
+
+  if (productViewMode === "list") renderProductsList(list); else renderProductsGrid(list);
+}
+
+function renderProductsGrid(list) {
+  const grid = document.getElementById("productsGrid");
   if (!list.length) {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;"><strong>No products yet</strong>Add your first Oriflame product to start tracking stock.</div>`;
     return;
   }
 
   grid.innerHTML = list.map(p => {
-    const low = p.quantity <= LOW_STOCK_THRESHOLD;
+    const qty = Number(p.quantity || 0);
+    const low = qty <= LOW_STOCK_THRESHOLD; // includes out-of-stock, same red treatment
+    const value = qty * Number(p.price || 0);
     const photo = p.image_url
       ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}">`
       : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>`;
@@ -351,7 +368,8 @@ function renderProducts() {
       <div class="product-body">
         <div class="product-name">${escapeHtml(p.name)}</div>
         ${p.category ? `<div class="product-category">${escapeHtml(p.category)}</div>` : ""}
-        <div class="qty-badge ${low ? "low" : ""}">${low ? "⚠ " : ""}${p.quantity} in stock</div>
+        <div class="qty-badge ${low ? "low" : ""}">${low ? "⚠ " : ""}${qty} in stock</div>
+        <div class="product-value">${money(value)} value</div>
       </div>
     </div>`;
   }).join("");
@@ -366,6 +384,70 @@ function renderProducts() {
     card.addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
       openStockDetail(card.dataset.id);
+    });
+  });
+}
+
+function renderProductsList(list) {
+  const wrap = document.getElementById("productsList");
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = list.map(p => {
+    const qty = Number(p.quantity || 0);
+    const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+    const out = qty === 0;
+    const value = qty * Number(p.price || 0);
+    const statusLabel = out ? "Out of stock" : low ? "Low stock" : "In stock";
+    const statusClass = out ? "draft" : low ? "low" : "ok";
+    const photo = p.image_url
+      ? `<img src="${escapeHtml(p.image_url)}" alt="">`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3 4 3-4L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>`;
+    return `
+    <div class="product-list-row" data-id="${p.id}">
+      <div class="product-list-photo">${photo}</div>
+      <div class="product-list-info">
+        <div class="product-list-name">${escapeHtml(p.name)}</div>
+        <div class="product-list-meta">${qty} in stock · ${money(value)}${p.category ? " · " + escapeHtml(p.category) : ""}</div>
+      </div>
+      <span class="pill ${statusClass}">${statusLabel}</span>
+      <div class="product-list-actions">
+        <button class="icon-btn" data-action="edit-product" data-id="${p.id}" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </button>
+        <button class="icon-btn danger" data-action="delete-product" data-id="${p.id}" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }).join("");
+
+  wrap.querySelectorAll('[data-action="delete-product"]').forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); deleteProduct(btn.dataset.id); });
+  });
+  wrap.querySelectorAll('[data-action="edit-product"]').forEach(btn => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); openProductModal(btn.dataset.id); });
+  });
+  wrap.querySelectorAll('.product-list-row').forEach(row => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      openStockDetail(row.dataset.id);
+    });
+  });
+}
+
+function bindProductViewToggle() {
+  const toggle = document.getElementById("productViewToggle");
+  if (!toggle) return;
+  toggle.querySelectorAll("[data-view-mode]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      productViewMode = btn.dataset.viewMode;
+      toggle.querySelectorAll("[data-view-mode]").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("productsGrid").style.display = productViewMode === "grid" ? "" : "none";
+      document.getElementById("productsList").style.display = productViewMode === "list" ? "" : "none";
+      renderProducts();
     });
   });
 }
@@ -474,56 +556,6 @@ function bindProductModal() {
     } finally {
       btn.disabled = false; btn.textContent = editingProductId ? "Save changes" : "Save product";
     }
-  });
-}
-
-// ==========================================================
-// STOCK
-// ==========================================================
-function renderStock() {
-  const tbody = document.getElementById("stockTableBody");
-  const q = document.getElementById("stockSearch").value.trim().toLowerCase();
-  const filter = document.getElementById("stockFilter").value;
-  let list = productsCache.filter(p => p.name.toLowerCase().includes(q));
-  if (filter === "low") list = list.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= LOW_STOCK_THRESHOLD);
-  if (filter === "out") list = list.filter(p => Number(p.quantity) === 0);
-
-  const totalUnits = productsCache.reduce((n,p) => n + Number(p.quantity || 0), 0);
-  const lowCount = productsCache.filter(p => Number(p.quantity || 0) <= LOW_STOCK_THRESHOLD).length;
-  const stockValue = productsCache.reduce((n,p) => n + Number(p.quantity || 0) * Number(p.price || 0), 0);
-  const set = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=value; };
-  set("stockSummaryProducts", productsCache.length);
-  set("stockSummaryUnits", totalUnits);
-  set("stockSummaryValue", money(stockValue));
-  set("stockSummaryLow", lowCount);
-
-  if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Nothing to show</strong>Try a different search or filter.</div></td></tr>`;
-    return;
-  }
-  tbody.innerHTML = list.map(p => {
-    const qty = Number(p.quantity || 0);
-    const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
-    const out = qty === 0;
-    const rowValue = qty * Number(p.price || 0);
-    return `<tr class="clickable-row" data-id="${p.id}">
-      <td class="name-cell">${p.image_url ? `<img class="row-thumb" src="${escapeHtml(p.image_url)}" alt="">` : `<span class="row-thumb placeholder-thumb">◈</span>`}<div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.barcode || "No barcode")}</small></div></td>
-      <td>${escapeHtml(p.category || "—")}</td>
-      <td><strong class="stock-number ${out ? "out" : low ? "low" : ""}">${qty}</strong> units</td>
-      <td>${money(rowValue)}</td>
-      <td><span class="pill ${out ? "draft" : low ? "low" : "ok"}">${out ? "Out of stock" : low ? "⚠ Low stock" : "In stock"}</span></td>
-      <td><button class="icon-btn" title="Edit product" data-action="edit-product" data-id="${p.id}">✎</button></td>
-    </tr>`;
-  }).join("");
-
-  tbody.querySelectorAll('[data-action="edit-product"]').forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); openProductModal(btn.dataset.id); });
-  });
-  tbody.querySelectorAll("tr.clickable-row").forEach(row => {
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      openStockDetail(row.dataset.id);
-    });
   });
 }
 
