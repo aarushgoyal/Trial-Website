@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
 
@@ -36,7 +36,6 @@
   <div class="nav-group">
     <button class="nav-btn active" data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/></svg><span>Dashboard</span></button>
     <button class="nav-btn" data-view="products"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg><span>Products</span></button>
-    <button class="nav-btn" data-view="stock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4 8 4 8-4z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M4 7l8 4M20 7l-8 4"/></svg><span>Stock</span></button>
     <button class="nav-btn" data-view="purchases"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h2l2.2 12.2a2 2 0 0 0 2 1.8h8.6a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="9" cy="21" r="1"/><circle cx="17" cy="21" r="1"/></svg><span>Purchases</span></button>
     <button class="nav-btn" data-view="sales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Sales</span></button>
   </div>
@@ -66,16 +65,26 @@
   </section>
 
   <section class="view" id="view-products">
-    <div class="view-head modern-head"><div><span class="eyebrow">CATALOGUE</span><h2>Products</h2><p>Manage your product catalogue and availability.</p></div><button class="btn primary-lg" id="btnAddProduct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Add product</button></div>
-    <div class="toolbar"><div class="search-bar"><span>⌕</span><input type="text" id="productSearch" placeholder="Search products…"></div><div class="filter-pills" id="productFilters"><button class="filter-pill active" data-product-filter="all">All</button><button class="filter-pill" data-product-filter="active">In stock</button><button class="filter-pill" data-product-filter="low">Low stock</button><button class="filter-pill" data-product-filter="out">Out of stock</button></div><div class="view-toggle"><button class="active" title="Grid">▦</button><button title="List">☷</button></div></div>
+    <div class="view-head modern-head">
+      <div><span class="eyebrow">CATALOGUE &amp; INVENTORY</span><h2>Products</h2><p>Manage your product catalogue and stock levels.</p></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn ghost" type="button" onclick="exportStockCsv()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Export</button>
+        <button class="btn primary-lg" id="btnAddProduct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Add product</button>
+      </div>
+    </div>
+    <div class="stock-summary">
+      <div><span>Products</span><strong id="stockSummaryProducts">0</strong></div>
+      <div><span>Units in stock</span><strong id="stockSummaryUnits">0</strong></div>
+      <div><span>Stock value</span><strong id="stockSummaryValue">₹0</strong></div>
+      <div class="warn"><span>Needs attention</span><strong id="stockSummaryLow">0</strong></div>
+    </div>
+    <div class="toolbar">
+      <div class="search-bar"><span>⌕</span><input type="text" id="productSearch" placeholder="Search products…"></div>
+      <div class="filter-pills" id="productFilters"><button class="filter-pill active" data-product-filter="all">All</button><button class="filter-pill" data-product-filter="active">In stock</button><button class="filter-pill" data-product-filter="low">Low stock</button><button class="filter-pill" data-product-filter="out">Out of stock</button></div>
+      <div class="view-toggle" id="productViewToggle"><button class="active" type="button" data-view-mode="grid" title="Grid">▦</button><button type="button" data-view-mode="list" title="List">☷</button></div>
+    </div>
     <div class="products-grid" id="productsGrid"></div>
-  </section>
-
-  <section class="view" id="view-stock">
-    <div class="view-head modern-head"><div><span class="eyebrow">INVENTORY</span><h2>Stock</h2><p>Monitor quantity, stock value and reorder status at a glance.</p></div><button class="btn ghost" type="button" onclick="exportStockCsv()">⇩ Export</button></div>
-    <div class="stock-summary"><div><span>Products</span><strong id="stockSummaryProducts">0</strong></div><div><span>Units in stock</span><strong id="stockSummaryUnits">0</strong></div><div><span>Stock value</span><strong id="stockSummaryValue">₹0</strong></div><div class="warn"><span>Needs attention</span><strong id="stockSummaryLow">0</strong></div></div>
-    <div class="toolbar"><div class="search-bar"><span>⌕</span><input type="text" id="stockSearch" placeholder="Search products…"></div><select id="stockFilter"><option value="all">All products</option><option value="low">Low stock</option><option value="out">Out of stock</option></select></div>
-    <div class="table-wrap"><div class="table-scroll"><table class="modern-table"><thead><tr><th>Product</th><th>Category</th><th>Current stock</th><th>Stock value</th><th>Status</th><th>Actions</th></tr></thead><tbody id="stockTableBody"></tbody></table></div></div>
+    <div class="products-list" id="productsList" style="display:none;"></div>
   </section>
 
   <section class="view" id="view-purchases">
@@ -337,6 +346,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>
