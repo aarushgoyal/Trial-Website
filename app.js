@@ -47,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindStockDetailModal();
   bindAdjustStockModal();
   bindProductViewToggle();
+  bindMobileBillTabs();
   const sideBin = document.getElementById("btnRecycleBinSide");
   if (sideBin) sideBin.addEventListener("click", () => document.getElementById("btnRecycleBin")?.click());
 
@@ -452,6 +453,34 @@ function bindProductViewToggle() {
   });
 }
 
+function bindMobileBillTabs() {
+  const puTabs = document.getElementById("purchaseMobileTabs");
+  if (puTabs) {
+    puTabs.querySelectorAll("[data-status-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        purchaseStatusFilter = btn.dataset.statusFilter;
+        puTabs.querySelectorAll("[data-status-filter]").forEach(b => b.classList.toggle("active", b === btn));
+        renderPurchasesMobileList();
+      });
+    });
+  }
+  const saTabs = document.getElementById("saleMobileTabs");
+  if (saTabs) {
+    saTabs.querySelectorAll("[data-status-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        saleStatusFilter = btn.dataset.statusFilter;
+        saTabs.querySelectorAll("[data-status-filter]").forEach(b => b.classList.toggle("active", b === btn));
+        renderSalesMobileList();
+      });
+    });
+  }
+
+  const fabPurchase = document.getElementById("fabAddPurchase");
+  if (fabPurchase) fabPurchase.addEventListener("click", () => openPurchaseModal(null));
+  const fabSale = document.getElementById("fabAddSale");
+  if (fabSale) fabSale.addEventListener("click", () => openSaleModal(null));
+}
+
 async function deleteProduct(id) {
   if (!requireConnection()) return;
   if (!confirm("Delete this product? This won't remove past bills, but it will disappear from your product list.")) return;
@@ -770,6 +799,53 @@ function renderPurchases() {
       deleteBill("purchase", btn.dataset.id);
     });
   });
+
+  renderPurchasesMobileList();
+}
+
+let purchaseStatusFilter = "all"; // 'all' | 'completed' | 'draft' — mobile tabs only
+
+function renderPurchasesMobileList() {
+  const wrap = document.getElementById("purchasesListMobile");
+  if (!wrap) return;
+
+  const all = purchasesCache.length;
+  const completed = purchasesCache.filter(p => p.status === "completed").length;
+  const draft = purchasesCache.filter(p => p.status === "draft").length;
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = `(${v})`; };
+  setText("puTabAllCount", all);
+  setText("puTabCompletedCount", completed);
+  setText("puTabDraftCount", draft);
+
+  let list = purchasesCache.map((p, i) => ({ p, i }));
+  if (purchaseStatusFilter !== "all") list = list.filter(x => x.p.status === purchaseStatusFilter);
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty"><strong>Nothing here</strong>No bills match this tab yet.</div>`;
+    return;
+  }
+
+  const bagIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.2 12.2a2 2 0 0 0 2 1.8h8.6a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="9" cy="21" r="1"/><circle cx="17" cy="21" r="1"/></svg>`;
+
+  wrap.innerHTML = list.map(({ p, i }) => `
+    <div class="bill-row-mobile" data-id="${p.id}">
+      <div class="bill-row-left">
+        <div class="bill-row-icon">${bagIcon}</div>
+        <div>
+          <div class="bill-row-no">${escapeHtml(getBillNumber("purchase", p, i, purchasesCache.length))}</div>
+          <div class="bill-row-meta">${formatDate(p.purchase_date)}</div>
+          <div class="bill-row-meta">${escapeHtml(p.dealer_name || "")}</div>
+        </div>
+      </div>
+      <div class="bill-row-right">
+        <div class="bill-row-amount">${money(p.total_amount)}</div>
+        <div class="bill-row-status ${p.status}">${p.status === "draft" ? "Draft" : "Completed"}</div>
+      </div>
+    </div>`).join("");
+
+  wrap.querySelectorAll(".bill-row-mobile").forEach(row => {
+    row.addEventListener("click", () => showBillDetail("purchase", row.dataset.id));
+  });
 }
 
 function formatDate(d) {
@@ -907,6 +983,53 @@ function renderSales() {
       e.stopPropagation();
       deleteBill("sale", btn.dataset.id);
     });
+  });
+
+  renderSalesMobileList();
+}
+
+let saleStatusFilter = "all"; // 'all' | 'completed' | 'draft' — mobile tabs only
+
+function renderSalesMobileList() {
+  const wrap = document.getElementById("salesListMobile");
+  if (!wrap) return;
+
+  const all = salesCache.length;
+  const completed = salesCache.filter(s => s.status === "completed").length;
+  const draft = salesCache.filter(s => s.status === "draft").length;
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = `(${v})`; };
+  setText("saTabAllCount", all);
+  setText("saTabCompletedCount", completed);
+  setText("saTabDraftCount", draft);
+
+  let list = salesCache.map((s, i) => ({ s, i }));
+  if (saleStatusFilter !== "all") list = list.filter(x => x.s.status === saleStatusFilter);
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty"><strong>Nothing here</strong>No bills match this tab yet.</div>`;
+    return;
+  }
+
+  const rupeeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+
+  wrap.innerHTML = list.map(({ s, i }) => `
+    <div class="bill-row-mobile" data-id="${s.id}">
+      <div class="bill-row-left">
+        <div class="bill-row-icon">${rupeeIcon}</div>
+        <div>
+          <div class="bill-row-no">${escapeHtml(getBillNumber("sale", s, i, salesCache.length))}</div>
+          <div class="bill-row-meta">${formatDate(s.sale_date)}</div>
+          <div class="bill-row-meta">${escapeHtml(s.buyer_name || "")}</div>
+        </div>
+      </div>
+      <div class="bill-row-right">
+        <div class="bill-row-amount">${money(s.total_amount)}</div>
+        <div class="bill-row-status ${s.status}">${s.status === "draft" ? "Draft" : "Completed"}</div>
+      </div>
+    </div>`).join("");
+
+  wrap.querySelectorAll(".bill-row-mobile").forEach(row => {
+    row.addEventListener("click", () => showBillDetail("sale", row.dataset.id));
   });
 }
 
