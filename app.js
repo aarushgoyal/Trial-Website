@@ -1776,11 +1776,17 @@ async function loadRecycleBin() {
           <span class="sub">${formatDate(b.date)}</span></span>
         <span class="right"><strong>${money(b.amount)}</strong>
           <button class="btn subtle sm" data-action="recover-bill" data-kind="${b.kind}" data-id="${b.id}">Recover</button>
+          <button class="icon-btn danger" data-action="purge-bill" data-kind="${b.kind}" data-id="${b.id}" title="Discard for good">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
         </span>
       </div>`).join("")
     : `<div class="empty" style="padding:18px;"><strong>Nothing here</strong>Deleted bills will show up here.</div>`;
   billsEl.querySelectorAll('[data-action="recover-bill"]').forEach(btn => {
     btn.addEventListener("click", () => recoverBill(btn.dataset.kind, btn.dataset.id));
+  });
+  billsEl.querySelectorAll('[data-action="purge-bill"]').forEach(btn => {
+    btn.addEventListener("click", () => purgeBill(btn.dataset.kind, btn.dataset.id));
   });
 
   const items = iRes.data || [];
@@ -1830,6 +1836,17 @@ async function purgeLineItem(id) {
   if (!confirm("Discard this removed product for good? It can't be recovered afterwards.")) return;
   const { error } = await sb.rpc("purge_deleted_line_item", { p_id: id });
   if (error) { toast("Couldn't discard: " + friendlyError(error), true); return; }
+  await loadRecycleBin();
+}
+
+async function purgeBill(kind, id) {
+  if (!requireConnection()) return;
+  if (!confirm("Permanently delete this bill? It can't be recovered afterwards.")) return;
+  const fn = kind === "purchase" ? "purge_purchase" : "purge_sale";
+  const arg = kind === "purchase" ? { p_purchase_id: id } : { p_sale_id: id };
+  const { error } = await sb.rpc(fn, arg);
+  if (error) { toast("Couldn't discard: " + friendlyError(error), true); return; }
+  toast("Bill permanently deleted");
   await loadRecycleBin();
 }
 
