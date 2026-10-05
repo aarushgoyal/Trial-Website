@@ -638,3 +638,56 @@ tr.clickable-row{ cursor:pointer; }
   .product-list-name{ font-size:12px; }
   .product-list-meta{ font-size:10px; }
 }
+
+/* ==========================================================
+   Purchases/Sales — mobile-only redesign (tabs + card rows +
+   floating add button). Desktop keeps the summary-strip + table
+   exactly as before; these are all hidden by default and only
+   switched on under the 760px breakpoint below.
+   ========================================================== */
+.mobile-bill-tabs{ display:none; }
+.bill-list-mobile{ display:none; }
+.fab-add{ display:none; }
+
+@media (max-width:760px){
+  #view-purchases .summary-strip, #view-sales .summary-strip{ display:none; }
+  #view-purchases .table-wrap, #view-sales .table-wrap{ display:none; }
+
+  .mobile-bill-tabs{
+    display:flex; gap:4px; background:#fff; border:1px solid var(--line);
+    border-radius:999px; padding:4px; margin-bottom:14px;
+  }
+  .mobile-bill-tabs button{
+    flex:1; border:none; background:transparent; cursor:pointer;
+    padding:9px 6px; border-radius:999px; font-size:12px; font-weight:700; color:var(--ink-soft);
+  }
+  .mobile-bill-tabs button.active{ background:var(--primary); color:#fff; }
+
+  .bill-list-mobile{ display:flex; flex-direction:column; gap:10px; padding-bottom:76px; }
+  .bill-row-mobile{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+    background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; cursor:pointer;
+  }
+  .bill-row-left{ display:flex; gap:10px; min-width:0; }
+  .bill-row-icon{
+    width:36px; height:36px; border-radius:10px; background:var(--primary-tint); color:var(--primary);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .bill-row-icon svg{ width:16px; height:16px; }
+  .bill-row-no{ font-weight:700; font-size:13px; }
+  .bill-row-meta{ font-size:11px; color:var(--ink-soft); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:46vw; }
+  .bill-row-right{ text-align:right; flex-shrink:0; }
+  .bill-row-amount{ font-weight:700; font-size:13px; }
+  .bill-row-status{ font-size:11px; font-weight:700; margin-top:3px; }
+  .bill-row-status.completed{ color:var(--good); }
+  .bill-row-status.draft{ color:var(--ink-faint); }
+
+  .fab-add{
+    display:flex; align-items:center; gap:6px;
+    position:fixed; right:16px; bottom:calc(var(--nav-h) + 16px); z-index:50;
+    background:var(--primary); color:#fff; border:none; border-radius:999px;
+    padding:13px 18px; font-weight:700; font-size:13px;
+    box-shadow:0 10px 24px -8px rgba(0,0,0,.35);
+  }
+  .fab-add svg{ width:16px; height:16px; }
+}
