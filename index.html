@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=18">
+<link rel="stylesheet" href="styles.css?v=19">
 </head>
 <body>
 
@@ -90,12 +90,30 @@
   <section class="view" id="view-purchases">
     <div class="view-head modern-head"><div><span class="eyebrow">INCOMING STOCK</span><h2>Purchases</h2><p>Manage your purchase bills and incoming inventory.</p></div><button class="btn primary-lg" id="btnAddPurchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New purchase</button></div>
     <div class="summary-strip"><div><span>Total bills</span><strong id="purchaseCountLabel">—</strong></div><div><span>Completed</span><strong id="purchaseCompletedLabel">—</strong></div><div><span>Pending drafts</span><strong id="purchaseDraftLabel">—</strong></div></div>
+
+    <div class="mobile-bill-tabs" id="purchaseMobileTabs">
+      <button type="button" class="active" data-status-filter="all">All <span id="puTabAllCount">(0)</span></button>
+      <button type="button" data-status-filter="completed">Completed <span id="puTabCompletedCount">(0)</span></button>
+      <button type="button" data-status-filter="draft">Drafts <span id="puTabDraftCount">(0)</span></button>
+    </div>
+    <div class="bill-list-mobile" id="purchasesListMobile"></div>
+    <button type="button" class="fab-add" id="fabAddPurchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New Purchase</button>
+
     <div class="table-wrap"><div class="table-scroll"><table class="modern-table bills-table"><thead><tr><th class="mobile-hide-col">Bill No.</th><th>Date</th><th class="mobile-hide-col">Dealer</th><th class="mobile-hide-col">Items</th><th>Total amount</th><th class="mobile-hide-col">Payment</th><th>Status</th><th class="actions-col">Actions</th></tr></thead><tbody id="purchasesTableBody"></tbody></table></div></div>
   </section>
 
   <section class="view" id="view-sales">
     <div class="view-head modern-head"><div><span class="eyebrow">OUTGOING STOCK</span><h2>Sales</h2><p>Manage customer sales, payments and completed bills.</p></div><button class="btn primary-lg" id="btnAddSale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New sale</button></div>
     <div class="summary-strip"><div><span>Total bills</span><strong id="salesCountLabel">—</strong></div><div><span>Completed</span><strong id="salesCompletedLabel">—</strong></div><div><span>Pending drafts</span><strong id="salesDraftLabel">—</strong></div></div>
+
+    <div class="mobile-bill-tabs" id="saleMobileTabs">
+      <button type="button" class="active" data-status-filter="all">All <span id="saTabAllCount">(0)</span></button>
+      <button type="button" data-status-filter="completed">Completed <span id="saTabCompletedCount">(0)</span></button>
+      <button type="button" data-status-filter="draft">Drafts <span id="saTabDraftCount">(0)</span></button>
+    </div>
+    <div class="bill-list-mobile" id="salesListMobile"></div>
+    <button type="button" class="fab-add" id="fabAddSale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New Sale</button>
+
     <div class="table-wrap"><div class="table-scroll"><table class="modern-table bills-table"><thead><tr><th class="mobile-hide-col">Bill No.</th><th>Date</th><th class="mobile-hide-col">Customer</th><th class="mobile-hide-col">Items</th><th>Total amount</th><th class="mobile-hide-col">Payment</th><th>Status</th><th class="actions-col">Actions</th></tr></thead><tbody id="salesTableBody"></tbody></table></div></div>
   </section>
 </main>
@@ -346,6 +364,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=37"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
